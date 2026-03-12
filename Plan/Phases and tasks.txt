@@ -6,7 +6,7 @@
 
 PHASE 2 — BACKEND CORE
 ✅ 5. Implement GET /accounts and GET /accounts/{id} endpoints
-6. Implement full holdings CRUD — get, create, update, delete
+✅ 6. Implement full holdings CRUD — get, create, update, delete
 7. Implement transactions endpoints — get, create, delete
 8. Integrate Finnhub API client for US stock prices
 9. Integrate CoinGecko API client for crypto prices
