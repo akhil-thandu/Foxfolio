@@ -1,0 +1,48 @@
+PHASE 1 — FOUNDATION
+1. Set up database migrations with Alembic and create all 7 tables in PostgreSQL
+2. Seed database with initial user, 3 accounts (Indian Broker, Robinhood, Crypto)
+3. Implement JWT authentication — login, refresh token, logout endpoints
+4. Protect all API routes with auth middleware
+
+PHASE 2 — BACKEND CORE
+5. Implement GET /accounts and GET /accounts/{id} endpoints
+6. Implement full holdings CRUD — get, create, update, delete
+7. Implement transactions endpoints — get, create, delete
+8. Integrate Finnhub API client for US stock prices
+9. Integrate CoinGecko API client for crypto prices
+10. Implement Redis caching layer for prices (5 min expiry)
+11. Implement API waterfall — Finnhub → Twelve Data → yfinance fallback
+12. Implement USD/INR currency conversion service
+13. Implement portfolio summary endpoint — net worth, daily change, P&L calculations
+14. Implement portfolio history endpoint — query daily snapshots
+15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
+16. Implement TWR calculation for portfolio snapshots
+17. Implement analytics endpoints — allocation breakdown, effective exposure
+
+PHASE 3 — FRONTEND FOUNDATION
+18. Build Sidebar component with navigation links
+19. Build Topbar component with currency toggle and refresh indicator
+20. Build Dashboard layout wrapping sidebar + topbar
+21. Build Login page UI — two panel layout, password form, JWT auth flow
+22. Connect Login page to backend auth API
+
+PHASE 4 — FRONTEND PAGES
+23. Build Dashboard page — net worth number, daily change, time filter tabs
+24. Build Robinhood-style portfolio graph using Recharts with time range switching
+25. Build account summary cards on Dashboard (Indian Broker, Robinhood, Crypto)
+26. Build Indian Broker account page — holdings list, account graph
+27. Build Robinhood account page — holdings list, effective exposure section, account graph
+28. Build Crypto account page — holdings list, account graph
+29. Build Holdings list component — ticker, quantity, avg price, current price, P&L
+30. Build Transaction form modal — log buy/sell/dividend/reward/staking
+31. Build Analytics page — asset allocation pie chart
+32. Build Settings page — manage holdings (add, edit, delete), preferences
+
+PHASE 5 — POLISH
+33. Add dark/light mode toggle with theme persistence
+34. Add Framer Motion animations — page transitions, card reveals, graph entrance
+35. Add loading skeletons for all data-fetching states
+36. Add error states and delayed price indicators
+37. Add mini sparkline graphs per holding
+38. End to end testing — all flows working together
+39. Production deployment — Vercel (frontend) + Railway (backend) + Neon (database) + Upstash (Redis)

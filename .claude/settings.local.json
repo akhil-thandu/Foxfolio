@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Logan/Projects/Foxfolio\" && mkdir -p backend/app/api/v1 backend/app/core backend/app/db backend/app/cache backend/app/services backend/app/schemas backend/app/external backend/tests)",
+      "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && for d in app app/api app/api/v1 app/core app/db app/cache app/services app/schemas app/external tests; do touch \"$d/__init__.py\"; done)",
+      "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && pip install -r requirements.txt --ignore-requires-python 2>&1 | tail -30)",
+      "Bash(netstat -ano | grep 8000 || echo \"Port 8000 not in use\")",
+      "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && timeout 8 uvicorn app.main:app --port 8001 2>&1 || true)",
+      "Bash(cd \"C:/Logan/Projects/Foxfolio/frontend\" && npx next build 2>&1 | tail -30)",
+      "Bash(docker ps:*)"
+    ]
+  }
+}
