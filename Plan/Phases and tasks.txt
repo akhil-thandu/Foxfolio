@@ -1,11 +1,11 @@
-PHASE 1 — FOUNDATION
+✔ PHASE 1 — FOUNDATION
 ✅ 1. Set up database migrations with Alembic and create all 7 tables in PostgreSQL
 ✅ 2. Seed database with initial user, 3 accounts (Indian Broker, Robinhood, Crypto)
 ✅ 3. Implement JWT authentication — login, refresh token, logout endpoints
 ✅ 4. Protect all API routes with auth middleware
 
 PHASE 2 — BACKEND CORE
-5. Implement GET /accounts and GET /accounts/{id} endpoints
+✅ 5. Implement GET /accounts and GET /accounts/{id} endpoints
 6. Implement full holdings CRUD — get, create, update, delete
 7. Implement transactions endpoints — get, create, delete
 8. Integrate Finnhub API client for US stock prices
