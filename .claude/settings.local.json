@@ -10,7 +10,9 @@
       "Bash(docker ps:*)",
       "Bash(cd C:/Logan/Projects/Foxfolio && docker compose up -d postgres)",
       "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && python seed.py)",
-      "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && pip show bcrypt passlib 2>&1 | grep -E \"Name|Version\")"
+      "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && pip show bcrypt passlib 2>&1 | grep -E \"Name|Version\")",
+      "Bash(netstat -ano | grep 8001 | grep LISTENING)",
+      "Bash(taskkill //PID 14944 //F)"
     ]
   }
 }
