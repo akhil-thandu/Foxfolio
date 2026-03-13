@@ -1,855 +1,166 @@
-I need you to set up a full-stack project called Foxfolio in the current directory. Follow every instruction exactly.
+We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend.
 
-## OVERVIEW
-Foxfolio is a personal portfolio manager with:
-- Frontend: Next.js 14 + TypeScript + Tailwind CSS
-- Backend: FastAPI (Python)
-- Database: PostgreSQL + SQLAlchemy + Alembic
-- Cache: Redis
-- Local dev: Docker for PostgreSQL and Redis
+Rewrite one file completely as specified below.
 
----
+STEP 1 — Rewrite backend/app/api/v1/transactions.py with this exact content:
 
-## STEP 1 — ROOT STRUCTURE
-
-In the current directory create:
-- /frontend (empty for now)
-- /backend (empty for now)
-- .gitignore
-- README.md
-- docker-compose.yml
-
-### .gitignore contents:
-Python
-pycache/
-*.pyc
-*.pyo
-.env
-venv/
-.venv/
-*.egg-info/
-Node
-node_modules/
-.next/
-.env.local
-dist/
-build/
-General
-.DS_Store
-*.log
-
-### README.md contents:
-🦊 Foxfolio
-Personal Portfolio Manager — tracks Indian stocks, US stocks/ETFs, and crypto in one unified dashboard.
-Stack
-
-Frontend: Next.js + TypeScript
-Backend: FastAPI (Python)
-Database: PostgreSQL
-Cache: Redis
-
-Quick Start
-
-Start database and cache: docker-compose up -d
-Start backend: cd backend && uvicorn app.main:app --reload
-Start frontend: cd frontend && npm run dev
-
-
-### docker-compose.yml contents:
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15
-    container_name: foxfolio_postgres
-    environment:
-      POSTGRES_DB: foxfolio_dev
-      POSTGRES_USER: foxfolio
-      POSTGRES_PASSWORD: foxfolio_local
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7
-    container_name: foxfolio_redis
-    ports:
-      - "6379:6379"
-
-volumes:
-  postgres_data:
-```
-
----
-
-## STEP 2 — BACKEND SETUP
-
-### 2.1 Create full folder structure inside /backend:
-backend/
-├── app/
-│   ├── init.py
-│   ├── main.py
-│   ├── config.py
-│   ├── api/
-│   │   ├── init.py
-│   │   └── v1/
-│   │       ├── init.py
-│   │       ├── auth.py
-│   │       ├── portfolio.py
-│   │       ├── accounts.py
-│   │       ├── holdings.py
-│   │       ├── transactions.py
-│   │       ├── prices.py
-│   │       ├── analytics.py
-│   │       └── settings.py
-│   ├── core/
-│   │   ├── init.py
-│   │   ├── security.py
-│   │   ├── middleware.py
-│   │   └── scheduler.py
-│   ├── db/
-│   │   ├── init.py
-│   │   ├── database.py
-│   │   └── models.py
-│   ├── cache/
-│   │   ├── init.py
-│   │   └── redis.py
-│   ├── services/
-│   │   ├── init.py
-│   │   ├── portfolio_service.py
-│   │   ├── price_service.py
-│   │   ├── analytics_service.py
-│   │   └── currency_service.py
-│   ├── schemas/
-│   │   ├── init.py
-│   │   ├── auth.py
-│   │   ├── portfolio.py
-│   │   ├── holdings.py
-│   │   ├── transactions.py
-│   │   └── settings.py
-│   └── external/
-│       ├── init.py
-│       ├── finnhub.py
-│       ├── twelve_data.py
-│       ├── coingecko.py
-│       └── yfinance_client.py
-├── tests/
-│   ├── init.py
-│   ├── test_auth.py
-│   ├── test_portfolio.py
-│   └── test_prices.py
-├── .env
-├── .env.example
-├── requirements.txt
-└── alembic.ini
-
-### 2.2 Create /backend/requirements.txt with these exact contents:
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-sqlalchemy==2.0.30
-alembic==1.13.1
-psycopg2-binary==2.9.9
-redis==5.0.4
-apscheduler==3.10.4
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-pydantic==2.7.1
-pydantic-settings==2.3.0
-python-dotenv==1.0.1
-httpx==0.27.0
-yfinance==0.2.40
-python-multipart==0.0.9
-
-### 2.3 Create /backend/.env with these contents:
-DATABASE_URL=postgresql://foxfolio:foxfolio_local@localhost:5432/foxfolio_dev
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=foxfolio_dev_secret_change_in_production
-JWT_ACCESS_EXPIRE_MINUTES=15
-JWT_REFRESH_EXPIRE_DAYS=7
-FINNHUB_API_KEY=your_finnhub_key_here
-TWELVE_DATA_API_KEY=your_twelve_data_key_here
-COINGECKO_API_KEY=your_coingecko_key_here
-ENVIRONMENT=development
-CORS_ORIGIN=http://localhost:3000
-
-### 2.4 Create /backend/.env.example with same contents but empty values for keys:
-DATABASE_URL=postgresql://foxfolio:foxfolio_local@localhost:5432/foxfolio_dev
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=change_this_in_production
-JWT_ACCESS_EXPIRE_MINUTES=15
-JWT_REFRESH_EXPIRE_DAYS=7
-FINNHUB_API_KEY=
-TWELVE_DATA_API_KEY=
-COINGECKO_API_KEY=
-ENVIRONMENT=development
-CORS_ORIGIN=http://localhost:3000
-
-### 2.5 Create /backend/app/config.py:
-```python
-from pydantic_settings import BaseSettings
-
-class Settings(BaseSettings):
-    database_url: str
-    redis_url: str
-    jwt_secret: str
-    jwt_access_expire_minutes: int = 15
-    jwt_refresh_expire_days: int = 7
-    finnhub_api_key: str = ""
-    twelve_data_api_key: str = ""
-    coingecko_api_key: str = ""
-    environment: str = "development"
-    cors_origin: str = "http://localhost:3000"
-
-    class Config:
-        env_file = ".env"
-
-settings = Settings()
-```
-
-### 2.6 Create /backend/app/db/database.py:
-```python
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from app.config import settings
-
-engine = create_engine(settings.database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-```
-
-### 2.7 Create /backend/app/db/models.py:
-```python
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
 import uuid
-from sqlalchemy import Column, String, DateTime, Date, Numeric, Integer, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
-from app.db.database import Base
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(50), nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-
-class Account(Base):
-    __tablename__ = "accounts"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    name = Column(String(100), nullable=False)
-    account_type = Column(String(50), nullable=False)
-    currency = Column(String(10), nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-
-class Holding(Base):
-    __tablename__ = "holdings"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
-    ticker = Column(String(20), nullable=False)
-    name = Column(String(100), nullable=False)
-    asset_type = Column(String(20), nullable=False)
-    quantity = Column(Numeric(18, 8), nullable=False)
-    avg_buy_price = Column(Numeric(18, 8), nullable=False)
-    currency = Column(String(10), nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-
-class Transaction(Base):
-    __tablename__ = "transactions"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    holding_id = Column(UUID(as_uuid=True), ForeignKey("holdings.id"), nullable=False)
-    transaction_type = Column(String(20), nullable=False)
-    quantity = Column(Numeric(18, 8), nullable=True)
-    price_per_unit = Column(Numeric(18, 8), nullable=True)
-    total_value = Column(Numeric(18, 8), nullable=False)
-    transaction_date = Column(Date, nullable=False)
-    notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
-
-class PortfolioSnapshot(Base):
-    __tablename__ = "portfolio_snapshots"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    snapshot_date = Column(Date, nullable=False, unique=True)
-    total_value_usd = Column(Numeric(18, 2), nullable=False)
-    total_value_inr = Column(Numeric(18, 2), nullable=False)
-    twr = Column(Numeric(10, 6), nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-
-class IntradaySnapshot(Base):
-    __tablename__ = "intraday_snapshots"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    captured_at = Column(DateTime, nullable=False, unique=True)
-    total_value_usd = Column(Numeric(18, 2), nullable=False)
-    total_value_inr = Column(Numeric(18, 2), nullable=False)
-
-class Settings(Base):
-    __tablename__ = "settings"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    base_currency = Column(String(10), default="USD")
-    price_refresh_interval = Column(Integer, default=1)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-```
-
-### 2.8 Create /backend/app/cache/redis.py:
-```python
-import redis
-from app.config import settings
-
-redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-
-def get_cached_price(ticker: str):
-    return redis_client.get(f"price:{ticker}")
-
-def set_cached_price(ticker: str, price: float, expiry: int = 300):
-    redis_client.setex(f"price:{ticker}", expiry, price)
-
-def get_cached_exchange_rate(pair: str):
-    return redis_client.get(f"rate:{pair}")
-
-def set_cached_exchange_rate(pair: str, rate: float, expiry: int = 3600):
-    redis_client.setex(f"rate:{pair}", expiry, rate)
-```
-
-### 2.9 Create /backend/app/core/security.py:
-```python
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from app.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-def create_access_token(data: dict) -> str:
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=settings.jwt_access_expire_minutes)
-    to_encode.update({"exp": expire, "type": "access"})
-    return jwt.encode(to_encode, settings.jwt_secret, algorithm="HS256")
-
-def create_refresh_token(data: dict) -> str:
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.jwt_refresh_expire_days)
-    to_encode.update({"exp": expire, "type": "refresh"})
-    return jwt.encode(to_encode, settings.jwt_secret, algorithm="HS256")
-
-def decode_token(token: str) -> dict:
-    return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
-```
-
-### 2.10 Create /backend/app/main.py:
-```python
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings
-from app.api.v1 import auth, portfolio, accounts, holdings, transactions, prices, analytics, settings as settings_router
-
-app = FastAPI(
-    title="Foxfolio API",
-    description="Personal Portfolio Manager API",
-    version="1.0.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.cors_origin],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["portfolio"])
-app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["accounts"])
-app.include_router(holdings.router, prefix="/api/v1/accounts", tags=["holdings"])
-app.include_router(transactions.router, prefix="/api/v1/accounts", tags=["transactions"])
-app.include_router(prices.router, prefix="/api/v1/prices", tags=["prices"])
-app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
-app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["settings"])
-
-@app.get("/")
-def root():
-    return {"message": "🦊 Foxfolio API is running", "version": "1.0.0"}
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-```
-
-### 2.11 Create stub routers for all API files. Each file should follow this pattern. Create these for auth.py, portfolio.py, accounts.py, holdings.py, transactions.py, prices.py, analytics.py, and settings.py inside /backend/app/api/v1/:
-
-For /backend/app/api/v1/auth.py:
-```python
-from fastapi import APIRouter
+from datetime import date
+from app.db.database import get_db
+from app.db.models import Holding, Transaction
 
 router = APIRouter()
 
-@router.post("/login")
-def login():
-    return {"message": "login endpoint - coming soon"}
+INCOME_TYPES = {"dividend", "reward", "staking_earning"}
+TRADE_TYPES = {"buy", "sell"}
+ALL_TYPES = TRADE_TYPES | INCOME_TYPES
 
-@router.post("/refresh")
-def refresh():
-    return {"message": "refresh endpoint - coming soon"}
+class CreateTransactionRequest(BaseModel):
+    transaction_type: str
+    quantity: Optional[float] = None
+    price_per_unit: Optional[float] = None
+    total_value: float
+    transaction_date: date
+    notes: Optional[str] = None
 
-@router.post("/logout")
-def logout():
-    return {"message": "logout endpoint - coming soon"}
-```
-
-For /backend/app/api/v1/portfolio.py:
-```python
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("/summary")
-def get_summary():
-    return {"message": "portfolio summary - coming soon"}
-
-@router.get("/history")
-def get_history():
-    return {"message": "portfolio history - coming soon"}
-```
-
-For /backend/app/api/v1/accounts.py:
-```python
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("")
-def get_accounts():
-    return {"message": "accounts list - coming soon"}
-
-@router.get("/{account_id}")
-def get_account(account_id: str):
-    return {"message": f"account {account_id} - coming soon"}
-```
-
-For /backend/app/api/v1/holdings.py:
-```python
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("/{account_id}/holdings")
-def get_holdings(account_id: str):
-    return {"message": f"holdings for {account_id} - coming soon"}
-
-@router.post("/{account_id}/holdings")
-def create_holding(account_id: str):
-    return {"message": "create holding - coming soon"}
-
-@router.patch("/{account_id}/holdings/{holding_id}")
-def update_holding(account_id: str, holding_id: str):
-    return {"message": "update holding - coming soon"}
-
-@router.delete("/{account_id}/holdings/{holding_id}")
-def delete_holding(account_id: str, holding_id: str):
-    return {"message": "delete holding - coming soon"}
-```
-
-For /backend/app/api/v1/transactions.py:
-```python
-from fastapi import APIRouter
-
-router = APIRouter()
+def transaction_to_dict(t: Transaction) -> dict:
+    return {
+        "id": str(t.id),
+        "holding_id": str(t.holding_id),
+        "transaction_type": t.transaction_type,
+        "quantity": float(t.quantity) if t.quantity is not None else None,
+        "price_per_unit": float(t.price_per_unit) if t.price_per_unit is not None else None,
+        "total_value": float(t.total_value),
+        "transaction_date": t.transaction_date.isoformat(),
+        "notes": t.notes,
+        "created_at": t.created_at.isoformat() if t.created_at else None
+    }
 
 @router.get("/{account_id}/holdings/{holding_id}/transactions")
-def get_transactions(account_id: str, holding_id: str):
-    return {"message": "transactions - coming soon"}
+def get_transactions(account_id: str, holding_id: str, db: Session = Depends(get_db)):
+    holding = db.query(Holding).filter(
+        Holding.id == holding_id,
+        Holding.account_id == account_id
+    ).first()
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    transactions = db.query(Transaction).filter(
+        Transaction.holding_id == holding_id
+    ).order_by(Transaction.transaction_date.asc()).all()
+
+    return {
+        "success": True,
+        "data": [transaction_to_dict(t) for t in transactions]
+    }
 
 @router.post("/{account_id}/holdings/{holding_id}/transactions")
-def create_transaction(account_id: str, holding_id: str):
-    return {"message": "create transaction - coming soon"}
+def create_transaction(account_id: str, holding_id: str, body: CreateTransactionRequest, db: Session = Depends(get_db)):
+    holding = db.query(Holding).filter(
+        Holding.id == holding_id,
+        Holding.account_id == account_id
+    ).first()
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    if body.transaction_type not in ALL_TYPES:
+        raise HTTPException(status_code=400, detail=f"transaction_type must be one of: {sorted(ALL_TYPES)}")
+
+    if body.transaction_type in TRADE_TYPES:
+        if body.quantity is None or body.price_per_unit is None:
+            raise HTTPException(status_code=400, detail=f"quantity and price_per_unit are required for {body.transaction_type} transactions")
+
+    transaction = Transaction(
+        id=uuid.uuid4(),
+        holding_id=holding_id,
+        transaction_type=body.transaction_type,
+        quantity=body.quantity,
+        price_per_unit=body.price_per_unit,
+        total_value=body.total_value,
+        transaction_date=body.transaction_date,
+        notes=body.notes
+    )
+    db.add(transaction)
+
+    if body.transaction_type == "buy":
+        old_qty = float(holding.quantity)
+        old_avg = float(holding.avg_buy_price)
+        new_qty = body.quantity
+        new_price = body.price_per_unit
+        holding.avg_buy_price = ((old_qty * old_avg) + (new_qty * new_price)) / (old_qty + new_qty)
+        holding.quantity = old_qty + new_qty
+
+    db.commit()
+    db.refresh(transaction)
+
+    return {
+        "success": True,
+        "data": transaction_to_dict(transaction)
+    }
 
 @router.delete("/{account_id}/holdings/{holding_id}/transactions/{transaction_id}")
-def delete_transaction(account_id: str, holding_id: str, transaction_id: str):
-    return {"message": "delete transaction - coming soon"}
-```
+def delete_transaction(account_id: str, holding_id: str, transaction_id: str, db: Session = Depends(get_db)):
+    holding = db.query(Holding).filter(
+        Holding.id == holding_id,
+        Holding.account_id == account_id
+    ).first()
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
 
-For /backend/app/api/v1/prices.py:
-```python
-from fastapi import APIRouter
+    transaction = db.query(Transaction).filter(
+        Transaction.id == transaction_id,
+        Transaction.holding_id == holding_id
+    ).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
-router = APIRouter()
+    db.delete(transaction)
+    db.commit()
 
-@router.get("/{ticker}")
-def get_price(ticker: str):
-    return {"message": f"price for {ticker} - coming soon"}
-
-@router.get("/refresh")
-def refresh_prices():
-    return {"message": "price refresh - coming soon"}
-```
-
-For /backend/app/api/v1/analytics.py:
-```python
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("/allocation")
-def get_allocation():
-    return {"message": "allocation - coming soon"}
-
-@router.get("/exposure")
-def get_exposure():
-    return {"message": "exposure - coming soon"}
-```
-
-For /backend/app/api/v1/settings.py:
-```python
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("")
-def get_settings():
-    return {"message": "settings - coming soon"}
-
-@router.patch("")
-def update_settings():
-    return {"message": "update settings - coming soon"}
-```
-
-### 2.12 Create empty stub files for all services (just a comment inside each):
-- /backend/app/services/portfolio_service.py → `# Portfolio calculation service`
-- /backend/app/services/price_service.py → `# Price fetching service with API waterfall`
-- /backend/app/services/analytics_service.py → `# Analytics and allocation service`
-- /backend/app/services/currency_service.py → `# Currency conversion service`
-
-### 2.13 Create empty stub files for all external clients:
-- /backend/app/external/finnhub.py → `# Finnhub API client`
-- /backend/app/external/twelve_data.py → `# Twelve Data API client`
-- /backend/app/external/coingecko.py → `# CoinGecko API client`
-- /backend/app/external/yfinance_client.py → `# yfinance fallback client`
-
-### 2.14 Initialize Alembic inside /backend:
-Run: `cd backend && alembic init app/db/migrations`
-Then update /backend/alembic.ini: set `sqlalchemy.url = postgresql://foxfolio:foxfolio_local@localhost:5432/foxfolio_dev`
-Then update /backend/app/db/migrations/env.py to import models: add `from app.db.models import Base` and set `target_metadata = Base.metadata`
-
-### 2.15 Install backend dependencies:
-Run: `cd backend && pip install -r requirements.txt`
-
----
-
-## STEP 3 — FRONTEND SETUP
-
-### 3.1 Create Next.js app inside /frontend:
-Run: `npx create-next-app@latest frontend --typescript --tailwind --eslint --app --no-src-dir --import-alias "@/*"`
-
-### 3.2 Install additional frontend dependencies inside /frontend:
-Run: `cd frontend && npm install framer-motion recharts zustand axios @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-tabs lucide-react class-variance-authority clsx tailwind-merge`
-
-### 3.3 Create full folder structure inside /frontend (create empty index files in each):
-frontend/
-├── app/
-│   ├── (auth)/
-│   │   └── login/
-│   │       └── page.tsx
-│   └── (dashboard)/
-│       ├── layout.tsx
-│       ├── dashboard/
-│       │   └── page.tsx
-│       ├── accounts/
-│       │   ├── indian/
-│       │   │   └── page.tsx
-│       │   ├── robinhood/
-│       │   │   └── page.tsx
-│       │   └── crypto/
-│       │       └── page.tsx
-│       ├── analytics/
-│       │   └── page.tsx
-│       └── settings/
-│           └── page.tsx
-├── components/
-│   ├── ui/
-│   ├── charts/
-│   │   ├── PortfolioGraph.tsx
-│   │   ├── AllocationChart.tsx
-│   │   └── MiniSparkline.tsx
-│   ├── holdings/
-│   │   ├── HoldingsList.tsx
-│   │   └── HoldingRow.tsx
-│   ├── transactions/
-│   │   └── TransactionForm.tsx
-│   └── layout/
-│       ├── Sidebar.tsx
-│       ├── Topbar.tsx
-│       └── CurrencyToggle.tsx
-├── lib/
-│   ├── api.ts
-│   ├── auth.ts
-│   └── utils.ts
-├── hooks/
-│   ├── usePortfolio.ts
-│   ├── usePrices.ts
-│   └── useAuth.ts
-├── store/
-│   └── portfolio.ts
-└── types/
-└── index.ts
-
-### 3.4 Create /frontend/.env.local:
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-### 3.5 Update /frontend/tailwind.config.ts to include our color palette:
-```typescript
-import type { Config } from "tailwindcss";
-
-const config: Config = {
-  darkMode: "class",
-  content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        bg: {
-          primary: "#0D0D12",
-          surface: "#13131A",
-          raised: "#1C1C26",
-        },
-        border: {
-          subtle: "#2D2D3D",
-        },
-        accent: {
-          violet: "#7B4FFF",
-          cyan: "#00E5FF",
-        },
-        profit: "#00C805",
-        loss: "#FF3B30",
-        text: {
-          primary: "#F0F0FF",
-          secondary: "#7070A0",
-        },
-      },
-      fontFamily: {
-        sans: ["Inter", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
-      },
-    },
-  },
-  plugins: [],
-};
-
-export default config;
-```
-
-### 3.6 Update /frontend/app/globals.css:
-```css
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --bg-primary: #0D0D12;
-  --bg-surface: #13131A;
-  --bg-raised: #1C1C26;
-  --border-subtle: #2D2D3D;
-  --accent-violet: #7B4FFF;
-  --accent-cyan: #00E5FF;
-  --profit: #00C805;
-  --loss: #FF3B30;
-  --text-primary: #F0F0FF;
-  --text-secondary: #7070A0;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-}
-```
-
-### 3.7 Create /frontend/types/index.ts:
-```typescript
-export interface User {
-  id: string;
-  username: string;
-}
-
-export interface Account {
-  id: string;
-  name: string;
-  account_type: 'indian_broker' | 'robinhood' | 'crypto';
-  currency: 'USD' | 'INR';
-  total_value_usd?: number;
-  total_value_inr?: number;
-}
-
-export interface Holding {
-  id: string;
-  account_id: string;
-  ticker: string;
-  name: string;
-  asset_type: 'stock' | 'etf' | 'crypto';
-  quantity: number;
-  avg_buy_price: number;
-  currency: string;
-  current_price?: number;
-  total_value?: number;
-  pnl?: number;
-  pnl_percent?: number;
-}
-
-export interface Transaction {
-  id: string;
-  holding_id: string;
-  transaction_type: 'buy' | 'sell' | 'dividend' | 'reward' | 'staking_earning';
-  quantity?: number;
-  price_per_unit?: number;
-  total_value: number;
-  transaction_date: string;
-  notes?: string;
-}
-
-export interface PortfolioSummary {
-  total_value_usd: number;
-  total_value_inr: number;
-  daily_change_usd: number;
-  daily_change_percent: number;
-  prices_fresh: boolean;
-}
-
-export interface SnapshotPoint {
-  date: string;
-  value: number;
-  twr: number;
-}
-```
-
-### 3.8 Create /frontend/lib/api.ts:
-```typescript
-import axios from 'axios';
-
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  withCredentials: true,
-});
-
-api.interceptors.request.use((config) => {
-  const token = typeof window !== 'undefined' ? (window as any).__accessToken : null;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      try {
-        const res = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
-        (window as any).__accessToken = res.data.access_token;
-        error.config.headers.Authorization = `Bearer ${res.data.access_token}`;
-        return api(error.config);
-      } catch {
-        window.location.href = '/login';
-      }
+    return {
+        "success": True,
+        "data": {"message": "Transaction deleted successfully"}
     }
-    return Promise.reject(error);
-  }
-);
 
-export default api;
-```
 
-### 3.9 Create simple stub pages for each route. Each page should just render a heading so we know routing works:
+STEP 2 — Start the backend server:
+cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --reload --port 8001
 
-/frontend/app/(auth)/login/page.tsx:
-```typescript
-export default function LoginPage() {
-  return (
-    <main className="min-h-screen bg-bg-primary flex items-center justify-center">
-      <h1 className="text-text-primary font-mono text-4xl font-bold">🦊 FOXFOLIO</h1>
-    </main>
-  );
-}
-```
+Confirm it starts with no errors then stop it.
 
-/frontend/app/(dashboard)/dashboard/page.tsx:
-```typescript
-export default function DashboardPage() {
-  return (
-    <div className="text-text-primary p-8">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
-    </div>
-  );
-}
-```
+STEP 3 — Run these tests and show full output of each:
 
-/frontend/app/(dashboard)/layout.tsx:
-```typescript
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-bg-primary flex">
-      <aside className="w-60 bg-bg-surface border-r border-border-subtle">
-        <div className="p-6">
-          <span className="text-text-primary font-mono font-bold">🦊 FOXFOLIO</span>
-        </div>
-      </aside>
-      <main className="flex-1">{children}</main>
-    </div>
-  );
-}
-```
+cd C:/Logan/Projects/Foxfolio/backend
 
-Create similar simple stub pages for:
-- /frontend/app/(dashboard)/accounts/indian/page.tsx → heading "Indian Broker"
-- /frontend/app/(dashboard)/accounts/robinhood/page.tsx → heading "Robinhood"
-- /frontend/app/(dashboard)/accounts/crypto/page.tsx → heading "Crypto"
-- /frontend/app/(dashboard)/analytics/page.tsx → heading "Analytics"
-- /frontend/app/(dashboard)/settings/page.tsx → heading "Settings"
+Test 1 — Login and save token:
+curl -s -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d "{\"password\": \"logandev123\"}" > token.json
 
----
+Test 2 — Get accounts and save Groww account ID:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/accounts -H "Authorization: Bearer $TOKEN" > accounts.json
 
-## STEP 4 — VERIFY EVERYTHING
+Test 3 — Create a holding on Groww to test against:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && ACCOUNT_ID=$(python -c "import json; d=json.load(open('accounts.json')); print(d['data'][0]['id'])") && curl -s -X POST http://localhost:8001/api/v1/accounts/$ACCOUNT_ID/holdings -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"ticker\": \"RELIANCE\", \"name\": \"Reliance Industries\", \"asset_type\": \"stock\", \"quantity\": 10, \"avg_buy_price\": 2500.00, \"currency\": \"INR\"}" > holding.json && cat holding.json
 
-1. Start Docker: `docker-compose up -d`
-2. Verify backend starts: `cd backend && uvicorn app.main:app --reload --port 8000`
-   - Should show "Foxfolio API is running" at http://localhost:8000
-   - Swagger UI should be accessible at http://localhost:8000/docs
-3. Verify frontend starts: `cd frontend && npm run dev`
-   - Should show the login page at http://localhost:3000
+Test 4 — Log a buy transaction and verify avg_buy_price recalculates:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && ACCOUNT_ID=$(python -c "import json; d=json.load(open('accounts.json')); print(d['data'][0]['id'])") && HOLDING_ID=$(python -c "import json; d=json.load(open('holding.json')); print(d['data']['id'])") && curl -s -X POST http://localhost:8001/api/v1/accounts/$ACCOUNT_ID/holdings/$HOLDING_ID/transactions -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"transaction_type\": \"buy\", \"quantity\": 10, \"price_per_unit\": 2600.00, \"total_value\": 26000.00, \"transaction_date\": \"2024-03-01\"}" > transaction.json && cat transaction.json
 
-Report any errors encountered and fix them. If pip install fails due to Python 3.14 compatibility issues, try installing with `--ignore-requires-python` flag or flag the specific packages that fail.
+Test 5 — Verify holding quantity and avg_buy_price updated:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && ACCOUNT_ID=$(python -c "import json; d=json.load(open('accounts.json')); print(d['data'][0]['id'])") && HOLDING_ID=$(python -c "import json; d=json.load(open('holding.json')); print(d['data']['id'])") && curl -s http://localhost:8001/api/v1/accounts/$ACCOUNT_ID/holdings/$HOLDING_ID -H "Authorization: Bearer $TOKEN"
 
-After everything is running, confirm:
-- ✅ Docker containers running (postgres + redis)
-- ✅ Backend running on port 8000
-- ✅ Swagger UI accessible at /docs
-- ✅ Frontend running on port 3000
-- ✅ All folder structures created correctly
+Test 6 — Log a dividend transaction (no quantity or price_per_unit):
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && ACCOUNT_ID=$(python -c "import json; d=json.load(open('accounts.json')); print(d['data'][0]['id'])") && HOLDING_ID=$(python -c "import json; d=json.load(open('holding.json')); print(d['data']['id'])") && curl -s -X POST http://localhost:8001/api/v1/accounts/$ACCOUNT_ID/holdings/$HOLDING_ID/transactions -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"transaction_type\": \"dividend\", \"total_value\": 500.00, \"transaction_date\": \"2024-03-15\"}"
+
+Test 7 — Get all transactions for the holding:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && ACCOUNT_ID=$(python -c "import json; d=json.load(open('accounts.json')); print(d['data'][0]['id'])") && HOLDING_ID=$(python -c "import json; d=json.load(open('holding.json')); print(d['data']['id'])") && curl -s http://localhost:8001/api/v1/accounts/$ACCOUNT_ID/holdings/$HOLDING_ID/transactions -H "Authorization: Bearer $TOKEN"
+
+Test 8 — Try invalid transaction type, expect 400:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && ACCOUNT_ID=$(python -c "import json; d=json.load(open('accounts.json')); print(d['data'][0]['id'])") && HOLDING_ID=$(python -c "import json; d=json.load(open('holding.json')); print(d['data']['id'])") && curl -s -X POST http://localhost:8001/api/v1/accounts/$ACCOUNT_ID/holdings/$HOLDING_ID/transactions -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"transaction_type\": \"invalid\", \"total_value\": 100.00, \"transaction_date\": \"2024-03-01\"}"
+
+Test 9 — Delete the buy transaction:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && ACCOUNT_ID=$(python -c "import json; d=json.load(open('accounts.json')); print(d['data'][0]['id'])") && HOLDING_ID=$(python -c "import json; d=json.load(open('holding.json')); print(d['data']['id'])") && TRANSACTION_ID=$(python -c "import json; d=json.load(open('transaction.json')); print(d['data']['id'])") && curl -s -X DELETE http://localhost:8001/api/v1/accounts/$ACCOUNT_ID/holdings/$HOLDING_ID/transactions/$TRANSACTION_ID -H "Authorization: Bearer $TOKEN"
+
+Report the full output of every step. Stop immediately if any step fails.

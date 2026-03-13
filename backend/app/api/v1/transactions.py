@@ -1,15 +1,121 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
+import uuid
+from datetime import date
+from app.db.database import get_db
+from app.db.models import Holding, Transaction
 
 router = APIRouter()
 
+INCOME_TYPES = {"dividend", "reward", "staking_earning"}
+TRADE_TYPES = {"buy", "sell"}
+ALL_TYPES = TRADE_TYPES | INCOME_TYPES
+
+class CreateTransactionRequest(BaseModel):
+    transaction_type: str
+    quantity: Optional[float] = None
+    price_per_unit: Optional[float] = None
+    total_value: float
+    transaction_date: date
+    notes: Optional[str] = None
+
+def transaction_to_dict(t: Transaction) -> dict:
+    return {
+        "id": str(t.id),
+        "holding_id": str(t.holding_id),
+        "transaction_type": t.transaction_type,
+        "quantity": float(t.quantity) if t.quantity is not None else None,
+        "price_per_unit": float(t.price_per_unit) if t.price_per_unit is not None else None,
+        "total_value": float(t.total_value),
+        "transaction_date": t.transaction_date.isoformat(),
+        "notes": t.notes,
+        "created_at": t.created_at.isoformat() if t.created_at else None
+    }
+
 @router.get("/{account_id}/holdings/{holding_id}/transactions")
-def get_transactions(account_id: str, holding_id: str):
-    return {"message": "transactions - coming soon"}
+def get_transactions(account_id: str, holding_id: str, db: Session = Depends(get_db)):
+    holding = db.query(Holding).filter(
+        Holding.id == holding_id,
+        Holding.account_id == account_id
+    ).first()
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    transactions = db.query(Transaction).filter(
+        Transaction.holding_id == holding_id
+    ).order_by(Transaction.transaction_date.asc()).all()
+
+    return {
+        "success": True,
+        "data": [transaction_to_dict(t) for t in transactions]
+    }
 
 @router.post("/{account_id}/holdings/{holding_id}/transactions")
-def create_transaction(account_id: str, holding_id: str):
-    return {"message": "create transaction - coming soon"}
+def create_transaction(account_id: str, holding_id: str, body: CreateTransactionRequest, db: Session = Depends(get_db)):
+    holding = db.query(Holding).filter(
+        Holding.id == holding_id,
+        Holding.account_id == account_id
+    ).first()
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    if body.transaction_type not in ALL_TYPES:
+        raise HTTPException(status_code=400, detail=f"transaction_type must be one of: {sorted(ALL_TYPES)}")
+
+    if body.transaction_type in TRADE_TYPES:
+        if body.quantity is None or body.price_per_unit is None:
+            raise HTTPException(status_code=400, detail=f"quantity and price_per_unit are required for {body.transaction_type} transactions")
+
+    transaction = Transaction(
+        id=uuid.uuid4(),
+        holding_id=holding_id,
+        transaction_type=body.transaction_type,
+        quantity=body.quantity,
+        price_per_unit=body.price_per_unit,
+        total_value=body.total_value,
+        transaction_date=body.transaction_date,
+        notes=body.notes
+    )
+    db.add(transaction)
+
+    if body.transaction_type == "buy":
+        old_qty = float(holding.quantity)
+        old_avg = float(holding.avg_buy_price)
+        new_qty = body.quantity
+        new_price = body.price_per_unit
+        holding.avg_buy_price = ((old_qty * old_avg) + (new_qty * new_price)) / (old_qty + new_qty)
+        holding.quantity = old_qty + new_qty
+
+    db.commit()
+    db.refresh(transaction)
+
+    return {
+        "success": True,
+        "data": transaction_to_dict(transaction)
+    }
 
 @router.delete("/{account_id}/holdings/{holding_id}/transactions/{transaction_id}")
-def delete_transaction(account_id: str, holding_id: str, transaction_id: str):
-    return {"message": "delete transaction - coming soon"}
+def delete_transaction(account_id: str, holding_id: str, transaction_id: str, db: Session = Depends(get_db)):
+    holding = db.query(Holding).filter(
+        Holding.id == holding_id,
+        Holding.account_id == account_id
+    ).first()
+    if not holding:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    transaction = db.query(Transaction).filter(
+        Transaction.id == transaction_id,
+        Transaction.holding_id == holding_id
+    ).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    db.delete(transaction)
+    db.commit()
+
+    return {
+        "success": True,
+        "data": {"message": "Transaction deleted successfully"}
+    }
