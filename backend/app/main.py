@@ -1,14 +1,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from contextlib import asynccontextmanager
 from app.config import settings
 from app.core.middleware import auth_middleware
+from app.core.scheduler import start_scheduler, scheduler
 from app.api.v1 import auth, portfolio, accounts, holdings, transactions, prices, analytics, settings as settings_router
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    scheduler.shutdown()
 
 app = FastAPI(
     title="Foxfolio API",
     description="Personal Portfolio Manager API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(

@@ -2,223 +2,254 @@ We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend
 
 Rewrite and create files exactly as specified below. Do all steps in order.
 
-STEP 1 — Rewrite backend/app/services/portfolio_service.py with this exact content:
+STEP 1 — Rewrite backend/app/core/scheduler.py with this exact content:
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from datetime import datetime, date, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import date, timedelta
-from app.db.models import Account, Holding, Transaction, PortfolioSnapshot, IntradaySnapshot
+from app.db.database import SessionLocal
+from app.db.models import Holding, PortfolioSnapshot, IntradaySnapshot
 from app.services.price_service import get_price
-from app.services.currency_service import convert_inr_to_usd, convert_usd_to_inr
+from app.services.currency_service import get_usd_to_inr, convert_usd_to_inr
+from app.services.portfolio_service import get_portfolio_summary, calculate_twr
+from app.cache.redis import set_cached_price
+import pytz
+import logging
 
-async def get_holding_value(holding: Holding) -> dict:
-    price_data = await get_price(holding.ticker, holding.asset_type)
-    current_price = price_data["price"] or 0
-    quantity = float(holding.quantity)
-    avg_buy_price = float(holding.avg_buy_price)
-    total_value = current_price * quantity
-    cost_basis = avg_buy_price * quantity
-    pnl = total_value - cost_basis
-    pnl_percent = (pnl / cost_basis * 100) if cost_basis > 0 else 0
+logger = logging.getLogger(__name__)
 
-    return {
-        "id": str(holding.id),
-        "account_id": str(holding.account_id),
-        "ticker": holding.ticker,
-        "name": holding.name,
-        "asset_type": holding.asset_type,
-        "quantity": quantity,
-        "avg_buy_price": avg_buy_price,
-        "current_price": current_price,
-        "currency": holding.currency,
-        "total_value": round(total_value, 2),
-        "cost_basis": round(cost_basis, 2),
-        "pnl": round(pnl, 2),
-        "pnl_percent": round(pnl_percent, 2),
-        "price_fresh": price_data["fresh"],
-        "price_source": price_data["source"]
-    }
+scheduler = AsyncIOScheduler()
 
-async def get_portfolio_summary(db: Session) -> dict:
-    accounts = db.query(Account).all()
-    holdings = db.query(Holding).all()
+US_MARKET_TZ = pytz.timezone("America/New_York")
 
-    holding_values = []
-    for h in holdings:
-        hv = await get_holding_value(h)
-        holding_values.append(hv)
+def is_us_market_open() -> bool:
+    now = datetime.now(US_MARKET_TZ)
+    if now.weekday() >= 5:
+        return False
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    return market_open <= now <= market_close
 
-    account_totals = {}
-    for account in accounts:
-        account_totals[str(account.id)] = {
-            "id": str(account.id),
-            "name": account.name,
-            "account_type": account.account_type,
-            "currency": account.currency,
-            "total_value_usd": 0.0,
-            "total_value_inr": 0.0
-        }
+async def refresh_prices_job():
+    db: Session = SessionLocal()
+    try:
+        holdings = db.query(Holding).all()
+        if not holdings:
+            return
 
-    total_value_usd = 0.0
-    for hv in holding_values:
-        account_id = hv["account_id"]
-        value = hv["total_value"]
-        currency = hv["currency"]
+        for holding in holdings:
+            is_us = holding.asset_type in ("stock", "etf") and not holding.ticker.endswith(".NS")
+            is_crypto = holding.asset_type == "crypto"
+            is_indian = holding.ticker.endswith(".NS")
 
-        if currency == "USD":
-            value_usd = value
-            value_inr = await convert_usd_to_inr(value) or 0
-        else:
-            value_usd = await convert_inr_to_usd(value) or 0
-            value_inr = value
+            if is_us and not is_us_market_open():
+                continue
 
-        total_value_usd += value_usd
-        if account_id in account_totals:
-            account_totals[account_id]["total_value_usd"] += round(value_usd, 2)
-            account_totals[account_id]["total_value_inr"] += round(value_inr, 2)
+            price_data = await get_price(holding.ticker, holding.asset_type)
+            if price_data["price"]:
+                set_cached_price(holding.ticker, price_data["price"])
 
-    total_value_inr = await convert_usd_to_inr(total_value_usd) or 0
+        logger.info(f"Price refresh completed for {len(holdings)} holdings")
+    except Exception as e:
+        logger.error(f"Price refresh job failed: {e}")
+    finally:
+        db.close()
 
-    yesterday = date.today() - timedelta(days=1)
-    yesterday_snapshot = db.query(PortfolioSnapshot).filter(
-        PortfolioSnapshot.snapshot_date == yesterday
-    ).first()
+async def write_intraday_snapshot_job():
+    db: Session = SessionLocal()
+    try:
+        summary = await get_portfolio_summary(db)
+        total_usd = summary["total_value_usd"]
+        total_inr = summary["total_value_inr"]
 
-    if yesterday_snapshot:
-        daily_change_usd = round(total_value_usd - float(yesterday_snapshot.total_value_usd), 2)
-        daily_change_percent = round(
-            (daily_change_usd / float(yesterday_snapshot.total_value_usd) * 100)
-            if yesterday_snapshot.total_value_usd > 0 else 0, 2
+        snapshot = IntradaySnapshot(
+            captured_at=datetime.now(timezone.utc),
+            total_value_usd=total_usd,
+            total_value_inr=total_inr
         )
-    else:
-        daily_change_usd = None
-        daily_change_percent = None
+        db.add(snapshot)
+        db.commit()
+        logger.info(f"Intraday snapshot written: ${total_usd}")
+    except Exception as e:
+        logger.error(f"Intraday snapshot job failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
-    return {
-        "total_value_usd": round(total_value_usd, 2),
-        "total_value_inr": round(total_value_inr, 2),
-        "daily_change_usd": daily_change_usd,
-        "daily_change_percent": daily_change_percent,
-        "accounts": list(account_totals.values()),
-        "holdings": holding_values
-    }
+async def write_daily_snapshot_job():
+    db: Session = SessionLocal()
+    try:
+        existing = db.query(PortfolioSnapshot).filter(
+            PortfolioSnapshot.snapshot_date == date.today()
+        ).first()
+        if existing:
+            logger.info("Daily snapshot already exists for today, skipping")
+            return
 
-async def get_portfolio_history(db: Session, range: str) -> list:
-    if range == "1H":
-        rows = db.query(IntradaySnapshot).order_by(
-            IntradaySnapshot.captured_at.asc()
-        ).limit(60).all()
-        return [
-            {"timestamp": r.captured_at.isoformat(), "value_usd": float(r.total_value_usd), "value_inr": float(r.total_value_inr)}
-            for r in rows
-        ]
-    elif range == "1D":
-        rows = db.query(IntradaySnapshot).order_by(
-            IntradaySnapshot.captured_at.asc()
-        ).all()
-        return [
-            {"timestamp": r.captured_at.isoformat(), "value_usd": float(r.total_value_usd), "value_inr": float(r.total_value_inr)}
-            for r in rows
-        ]
-    else:
-        limit_map = {
-            "1W": 7,
-            "1M": 30,
-            "3M": 90,
-            "1Y": 365,
-            "ALL": None
-        }
-        limit = limit_map.get(range, 30)
-        query = db.query(PortfolioSnapshot).order_by(PortfolioSnapshot.snapshot_date.asc())
-        if limit:
-            query = query.limit(limit)
-        rows = query.all()
-        return [
-            {"date": r.snapshot_date.isoformat(), "value_usd": float(r.total_value_usd), "value_inr": float(r.total_value_inr), "twr": float(r.twr)}
-            for r in rows
-        ]
+        summary = await get_portfolio_summary(db)
+        total_usd = summary["total_value_usd"]
+        total_inr = summary["total_value_inr"]
+        twr = calculate_twr(db, total_usd)
 
-def calculate_twr(db: Session, current_value_usd: float) -> float:
-    transactions = db.query(Transaction).order_by(Transaction.transaction_date.asc()).all()
-    snapshots = db.query(PortfolioSnapshot).order_by(PortfolioSnapshot.snapshot_date.asc()).all()
+        snapshot = PortfolioSnapshot(
+            snapshot_date=date.today(),
+            total_value_usd=total_usd,
+            total_value_inr=total_inr,
+            twr=twr
+        )
+        db.add(snapshot)
+        db.commit()
+        logger.info(f"Daily snapshot written: ${total_usd}, TWR: {twr}")
+    except Exception as e:
+        logger.error(f"Daily snapshot job failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
-    if not snapshots:
-        return 0.0
+async def refresh_exchange_rate_job():
+    try:
+        rate = await get_usd_to_inr()
+        logger.info(f"Exchange rate refreshed: USD/INR = {rate}")
+    except Exception as e:
+        logger.error(f"Exchange rate refresh failed: {e}")
 
-    cumulative_twr = 1.0
-    prev_value = float(snapshots[0].total_value_usd)
+async def cleanup_intraday_snapshots_job():
+    db: Session = SessionLocal()
+    try:
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        deleted = db.query(IntradaySnapshot).filter(
+            IntradaySnapshot.captured_at < cutoff
+        ).delete()
+        db.commit()
+        logger.info(f"Cleaned up {deleted} old intraday snapshots")
+    except Exception as e:
+        logger.error(f"Intraday cleanup job failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
-    for snapshot in snapshots[1:]:
-        end_value = float(snapshot.total_value_usd)
-        if prev_value > 0:
-            period_return = end_value / prev_value
-            cumulative_twr *= period_return
-        prev_value = end_value
-
-    if prev_value > 0:
-        final_period_return = current_value_usd / prev_value
-        cumulative_twr *= final_period_return
-
-    return round(cumulative_twr - 1, 6)
-
-
-STEP 2 — Rewrite backend/app/api/v1/portfolio.py with this exact content:
-
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from app.db.database import get_db
-from app.services.portfolio_service import get_portfolio_summary, get_portfolio_history
-
-router = APIRouter()
-
-VALID_RANGES = {"1H", "1D", "1W", "1M", "3M", "1Y", "ALL"}
-
-@router.get("/summary")
-async def portfolio_summary(db: Session = Depends(get_db)):
-    summary = await get_portfolio_summary(db)
-    return {
-        "success": True,
-        "data": summary
-    }
-
-@router.get("/history")
-async def portfolio_history(
-    range: str = Query(default="1M"),
-    db: Session = Depends(get_db)
-):
-    if range not in VALID_RANGES:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail=f"range must be one of: {sorted(VALID_RANGES)}")
-
-    history = await get_portfolio_history(db, range)
-    return {
-        "success": True,
-        "data": history
-    }
+def start_scheduler():
+    scheduler.add_job(
+        refresh_prices_job,
+        trigger=IntervalTrigger(minutes=5),
+        id="refresh_prices",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        write_intraday_snapshot_job,
+        trigger=IntervalTrigger(minutes=1),
+        id="intraday_snapshot",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        write_daily_snapshot_job,
+        trigger=IntervalTrigger(hours=24),
+        id="daily_snapshot",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        refresh_exchange_rate_job,
+        trigger=IntervalTrigger(hours=1),
+        id="exchange_rate",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        cleanup_intraday_snapshots_job,
+        trigger=IntervalTrigger(hours=1),
+        id="cleanup_intraday",
+        replace_existing=True
+    )
+    scheduler.start()
+    logger.info("Scheduler started with 5 jobs")
 
 
-STEP 3 — Start the backend server and confirm no errors:
+STEP 2 — Rewrite backend/app/main.py with this exact content:
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from contextlib import asynccontextmanager
+from app.config import settings
+from app.core.middleware import auth_middleware
+from app.core.scheduler import start_scheduler, scheduler
+from app.api.v1 import auth, portfolio, accounts, holdings, transactions, prices, analytics, settings as settings_router
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    scheduler.shutdown()
+
+app = FastAPI(
+    title="Foxfolio API",
+    description="Personal Portfolio Manager API",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.cors_origin],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
+
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["portfolio"])
+app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["accounts"])
+app.include_router(holdings.router, prefix="/api/v1/accounts", tags=["holdings"])
+app.include_router(transactions.router, prefix="/api/v1/accounts", tags=["transactions"])
+app.include_router(prices.router, prefix="/api/v1/prices", tags=["prices"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
+app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["settings"])
+
+@app.get("/")
+def root():
+    return {"message": "🦊 Foxfolio API is running", "version": "1.0.0"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+STEP 3 — Install pytz which is required by the scheduler:
+cd C:/Logan/Projects/Foxfolio/backend && pip install pytz && pip freeze | grep pytz
+
+STEP 4 — Add pytz to requirements.txt:
+Add the line "pytz>=2024.1" to backend/requirements.txt
+
+STEP 5 — Start the backend server and confirm scheduler starts cleanly:
 cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --reload --port 8001
 
-Confirm it starts cleanly then stop it.
+Let it run for 10 seconds and confirm you see:
+- "Scheduler started with 5 jobs" in logs
+- No errors or exceptions
 
-STEP 4 — Run these tests:
+Then stop it.
+
+STEP 6 — Run a quick verification test:
 
 cd C:/Logan/Projects/Foxfolio/backend
 
-Test 1 — Login and save token:
+Test 1 — Login:
 curl -s -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d "{\"password\": \"logandev123\"}" > token.json
 
-Test 2 — Get portfolio summary (we have a RELIANCE holding in the DB from earlier tests, if not it will return empty holdings):
-TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/portfolio/summary -H "Authorization: Bearer $TOKEN"
-
-Test 3 — Get portfolio history 1M (should return empty array, no snapshots yet):
-TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/portfolio/history?range=1M" -H "Authorization: Bearer $TOKEN"
-
-Test 4 — Get portfolio history 1H (should return empty array, no intraday snapshots yet):
-TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/portfolio/history?range=1H" -H "Authorization: Bearer $TOKEN"
-
-Test 5 — Invalid range, expect 400:
-TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/portfolio/history?range=INVALID" -H "Authorization: Bearer $TOKEN"
+Test 2 — Start server, wait 70 seconds for intraday snapshot job to run, then check intraday snapshots table:
+Start the server in background, wait 70 seconds, then run:
+cd C:/Logan/Projects/Foxfolio/backend && python -c "
+from app.db.database import SessionLocal
+from app.db.models import IntradaySnapshot
+db = SessionLocal()
+snapshots = db.query(IntradaySnapshot).all()
+print(f'Intraday snapshots count: {len(snapshots)}')
+for s in snapshots:
+    print(f'  {s.captured_at} — USD: {s.total_value_usd}, INR: {s.total_value_inr}')
+db.close()
+"
 
 Report the full output of every step. Stop immediately if any step fails.

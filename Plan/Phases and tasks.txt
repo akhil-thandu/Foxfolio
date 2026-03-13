@@ -16,8 +16,7 @@ PHASE 2 — BACKEND CORE
 ✅ 13. Implement portfolio summary endpoint — net worth, daily change, P&L calculations
 ✅ 14. Implement portfolio history endpoint — query daily snapshots
 ✅ 16. Implement TWR calculation for portfolio snapshots
-
-15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
+✅ 15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
 
 17. Implement analytics endpoints — allocation breakdown, effective exposure
 

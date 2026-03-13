@@ -1,3 +1,4 @@
 1. some holdings which are held in past and now sold completely, need to think how to solve this issue
 2. Adding, deleting, modifying holdings doesnt sound logically correct because a transaction either adds to a holding or subtracts to a holding, if havent held, then create a new holding
 3. deleting a transaction doesnt modify the details for the holding
+4. api data fetching intervals need to be discussed
