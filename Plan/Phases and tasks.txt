@@ -13,10 +13,9 @@ PHASE 2 — BACKEND CORE
 ✅ 10. Implement Redis caching layer for prices (5 min expiry)
 ✅ 11. Implement API waterfall — Finnhub → Twelve Data → yfinance fallback
 ✅ 12. Implement USD/INR currency conversion service
-
-13. Implement portfolio summary endpoint — net worth, daily change, P&L calculations
-14. Implement portfolio history endpoint — query daily snapshots
-16. Implement TWR calculation for portfolio snapshots
+✅ 13. Implement portfolio summary endpoint — net worth, daily change, P&L calculations
+✅ 14. Implement portfolio history endpoint — query daily snapshots
+✅ 16. Implement TWR calculation for portfolio snapshots
 
 15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
 

@@ -1,78 +1,224 @@
 We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend.
 
-Rewrite one file as specified below.
+Rewrite and create files exactly as specified below. Do all steps in order.
 
-STEP 1 — Rewrite backend/app/services/currency_service.py with this exact content:
+STEP 1 — Rewrite backend/app/services/portfolio_service.py with this exact content:
 
-import httpx
-from app.cache.redis import get_cached_exchange_rate, set_cached_exchange_rate
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from datetime import date, timedelta
+from app.db.models import Account, Holding, Transaction, PortfolioSnapshot, IntradaySnapshot
+from app.services.price_service import get_price
+from app.services.currency_service import convert_inr_to_usd, convert_usd_to_inr
 
-FRANKFURTER_BASE = "https://api.frankfurter.app"
+async def get_holding_value(holding: Holding) -> dict:
+    price_data = await get_price(holding.ticker, holding.asset_type)
+    current_price = price_data["price"] or 0
+    quantity = float(holding.quantity)
+    avg_buy_price = float(holding.avg_buy_price)
+    total_value = current_price * quantity
+    cost_basis = avg_buy_price * quantity
+    pnl = total_value - cost_basis
+    pnl_percent = (pnl / cost_basis * 100) if cost_basis > 0 else 0
 
-async def get_usd_to_inr() -> float | None:
-    cached = get_cached_exchange_rate("USD_INR")
-    if cached:
-        return float(cached)
+    return {
+        "id": str(holding.id),
+        "account_id": str(holding.account_id),
+        "ticker": holding.ticker,
+        "name": holding.name,
+        "asset_type": holding.asset_type,
+        "quantity": quantity,
+        "avg_buy_price": avg_buy_price,
+        "current_price": current_price,
+        "currency": holding.currency,
+        "total_value": round(total_value, 2),
+        "cost_basis": round(cost_basis, 2),
+        "pnl": round(pnl, 2),
+        "pnl_percent": round(pnl_percent, 2),
+        "price_fresh": price_data["fresh"],
+        "price_source": price_data["source"]
+    }
 
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(
-                f"{FRANKFURTER_BASE}/latest",
-                params={"from": "USD", "to": "INR"}
-            )
-            data = response.json()
-            rate = data.get("rates", {}).get("INR")
-            if rate:
-                set_cached_exchange_rate("USD_INR", rate)
-                return float(rate)
-            return None
-    except Exception:
-        return None
+async def get_portfolio_summary(db: Session) -> dict:
+    accounts = db.query(Account).all()
+    holdings = db.query(Holding).all()
 
-async def convert_inr_to_usd(inr_amount: float) -> float | None:
-    rate = await get_usd_to_inr()
-    if rate is None:
-        return None
-    return round(inr_amount / rate, 2)
+    holding_values = []
+    for h in holdings:
+        hv = await get_holding_value(h)
+        holding_values.append(hv)
 
-async def convert_usd_to_inr(usd_amount: float) -> float | None:
-    rate = await get_usd_to_inr()
-    if rate is None:
-        return None
-    return round(usd_amount * rate, 2)
+    account_totals = {}
+    for account in accounts:
+        account_totals[str(account.id)] = {
+            "id": str(account.id),
+            "name": account.name,
+            "account_type": account.account_type,
+            "currency": account.currency,
+            "total_value_usd": 0.0,
+            "total_value_inr": 0.0
+        }
+
+    total_value_usd = 0.0
+    for hv in holding_values:
+        account_id = hv["account_id"]
+        value = hv["total_value"]
+        currency = hv["currency"]
+
+        if currency == "USD":
+            value_usd = value
+            value_inr = await convert_usd_to_inr(value) or 0
+        else:
+            value_usd = await convert_inr_to_usd(value) or 0
+            value_inr = value
+
+        total_value_usd += value_usd
+        if account_id in account_totals:
+            account_totals[account_id]["total_value_usd"] += round(value_usd, 2)
+            account_totals[account_id]["total_value_inr"] += round(value_inr, 2)
+
+    total_value_inr = await convert_usd_to_inr(total_value_usd) or 0
+
+    yesterday = date.today() - timedelta(days=1)
+    yesterday_snapshot = db.query(PortfolioSnapshot).filter(
+        PortfolioSnapshot.snapshot_date == yesterday
+    ).first()
+
+    if yesterday_snapshot:
+        daily_change_usd = round(total_value_usd - float(yesterday_snapshot.total_value_usd), 2)
+        daily_change_percent = round(
+            (daily_change_usd / float(yesterday_snapshot.total_value_usd) * 100)
+            if yesterday_snapshot.total_value_usd > 0 else 0, 2
+        )
+    else:
+        daily_change_usd = None
+        daily_change_percent = None
+
+    return {
+        "total_value_usd": round(total_value_usd, 2),
+        "total_value_inr": round(total_value_inr, 2),
+        "daily_change_usd": daily_change_usd,
+        "daily_change_percent": daily_change_percent,
+        "accounts": list(account_totals.values()),
+        "holdings": holding_values
+    }
+
+async def get_portfolio_history(db: Session, range: str) -> list:
+    if range == "1H":
+        rows = db.query(IntradaySnapshot).order_by(
+            IntradaySnapshot.captured_at.asc()
+        ).limit(60).all()
+        return [
+            {"timestamp": r.captured_at.isoformat(), "value_usd": float(r.total_value_usd), "value_inr": float(r.total_value_inr)}
+            for r in rows
+        ]
+    elif range == "1D":
+        rows = db.query(IntradaySnapshot).order_by(
+            IntradaySnapshot.captured_at.asc()
+        ).all()
+        return [
+            {"timestamp": r.captured_at.isoformat(), "value_usd": float(r.total_value_usd), "value_inr": float(r.total_value_inr)}
+            for r in rows
+        ]
+    else:
+        limit_map = {
+            "1W": 7,
+            "1M": 30,
+            "3M": 90,
+            "1Y": 365,
+            "ALL": None
+        }
+        limit = limit_map.get(range, 30)
+        query = db.query(PortfolioSnapshot).order_by(PortfolioSnapshot.snapshot_date.asc())
+        if limit:
+            query = query.limit(limit)
+        rows = query.all()
+        return [
+            {"date": r.snapshot_date.isoformat(), "value_usd": float(r.total_value_usd), "value_inr": float(r.total_value_inr), "twr": float(r.twr)}
+            for r in rows
+        ]
+
+def calculate_twr(db: Session, current_value_usd: float) -> float:
+    transactions = db.query(Transaction).order_by(Transaction.transaction_date.asc()).all()
+    snapshots = db.query(PortfolioSnapshot).order_by(PortfolioSnapshot.snapshot_date.asc()).all()
+
+    if not snapshots:
+        return 0.0
+
+    cumulative_twr = 1.0
+    prev_value = float(snapshots[0].total_value_usd)
+
+    for snapshot in snapshots[1:]:
+        end_value = float(snapshot.total_value_usd)
+        if prev_value > 0:
+            period_return = end_value / prev_value
+            cumulative_twr *= period_return
+        prev_value = end_value
+
+    if prev_value > 0:
+        final_period_return = current_value_usd / prev_value
+        cumulative_twr *= final_period_return
+
+    return round(cumulative_twr - 1, 6)
 
 
-STEP 2 — Start the backend server and confirm no errors:
+STEP 2 — Rewrite backend/app/api/v1/portfolio.py with this exact content:
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.services.portfolio_service import get_portfolio_summary, get_portfolio_history
+
+router = APIRouter()
+
+VALID_RANGES = {"1H", "1D", "1W", "1M", "3M", "1Y", "ALL"}
+
+@router.get("/summary")
+async def portfolio_summary(db: Session = Depends(get_db)):
+    summary = await get_portfolio_summary(db)
+    return {
+        "success": True,
+        "data": summary
+    }
+
+@router.get("/history")
+async def portfolio_history(
+    range: str = Query(default="1M"),
+    db: Session = Depends(get_db)
+):
+    if range not in VALID_RANGES:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"range must be one of: {sorted(VALID_RANGES)}")
+
+    history = await get_portfolio_history(db, range)
+    return {
+        "success": True,
+        "data": history
+    }
+
+
+STEP 3 — Start the backend server and confirm no errors:
 cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --reload --port 8001
 
 Confirm it starts cleanly then stop it.
 
-STEP 3 — Run these tests:
+STEP 4 — Run these tests:
 
 cd C:/Logan/Projects/Foxfolio/backend
 
 Test 1 — Login and save token:
 curl -s -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d "{\"password\": \"logandev123\"}" > token.json
 
-Test 2 — Test the currency service directly in Python:
-cd C:/Logan/Projects/Foxfolio/backend && python -c "
-import asyncio
-from app.services.currency_service import get_usd_to_inr, convert_usd_to_inr, convert_inr_to_usd
+Test 2 — Get portfolio summary (we have a RELIANCE holding in the DB from earlier tests, if not it will return empty holdings):
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/portfolio/summary -H "Authorization: Bearer $TOKEN"
 
-async def test():
-    rate = await get_usd_to_inr()
-    print(f'USD/INR rate: {rate}')
+Test 3 — Get portfolio history 1M (should return empty array, no snapshots yet):
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/portfolio/history?range=1M" -H "Authorization: Bearer $TOKEN"
 
-    usd_to_inr = await convert_usd_to_inr(100)
-    print(f'100 USD = {usd_to_inr} INR')
+Test 4 — Get portfolio history 1H (should return empty array, no intraday snapshots yet):
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/portfolio/history?range=1H" -H "Authorization: Bearer $TOKEN"
 
-    inr_to_usd = await convert_inr_to_usd(8000)
-    print(f'8000 INR = {inr_to_usd} USD')
-
-    rate_cached = await get_usd_to_inr()
-    print(f'Second call (should be cached): {rate_cached}')
-
-asyncio.run(test())
-"
+Test 5 — Invalid range, expect 400:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/portfolio/history?range=INVALID" -H "Authorization: Bearer $TOKEN"
 
 Report the full output of every step. Stop immediately if any step fails.
