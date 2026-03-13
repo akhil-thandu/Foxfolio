@@ -12,7 +12,8 @@
       "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && python seed.py)",
       "Bash(cd \"C:/Logan/Projects/Foxfolio/backend\" && pip show bcrypt passlib 2>&1 | grep -E \"Name|Version\")",
       "Bash(netstat -ano | grep 8001 | grep LISTENING)",
-      "Bash(taskkill //PID 14944 //F)"
+      "Bash(taskkill //PID 14944 //F)",
+      "Bash(curl -s \"http://localhost:8001/openapi.json\" | python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(m, p\\) for p,v in d['paths'].items\\(\\) for m in v]\" 2>/dev/null | grep -i auth)"
     ]
   }
 }

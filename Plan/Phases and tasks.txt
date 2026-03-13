@@ -8,15 +8,19 @@ PHASE 2 — BACKEND CORE
 ✅ 5. Implement GET /accounts and GET /accounts/{id} endpoints
 ✅ 6. Implement full holdings CRUD — get, create, update, delete
 ✅ 7. Implement transactions endpoints — get, create, delete
-8. Integrate Finnhub API client for US stock prices
-9. Integrate CoinGecko API client for crypto prices
-10. Implement Redis caching layer for prices (5 min expiry)
-11. Implement API waterfall — Finnhub → Twelve Data → yfinance fallback
+✅ 8. Integrate Finnhub API client for US stock prices
+✅ 9. Integrate CoinGecko API client for crypto prices
+✅ 10. Implement Redis caching layer for prices (5 min expiry)
+✅ 11. Implement API waterfall — Finnhub → Twelve Data → yfinance fallback
+
 12. Implement USD/INR currency conversion service
+
 13. Implement portfolio summary endpoint — net worth, daily change, P&L calculations
 14. Implement portfolio history endpoint — query daily snapshots
-15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
 16. Implement TWR calculation for portfolio snapshots
+
+15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
+
 17. Implement analytics endpoints — allocation breakdown, effective exposure
 
 PHASE 3 — FRONTEND FOUNDATION

@@ -1,0 +1,19 @@
+Fix backend/app/external/yfinance_client.py. The fast_info object uses attribute access, not dict .get(). Rewrite it with this exact content:
+
+import yfinance as yf
+
+def fetch_price_yfinance(ticker: str) -> float | None:
+    try:
+        t = yf.Ticker(ticker)
+        info = t.fast_info
+        price = getattr(info, "last_price", None) or getattr(info, "regular_market_price", None)
+        if price and price > 0:
+            return float(price)
+        return None
+    except Exception:
+        return None
+
+After saving the file, re-run Test 5 only:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/prices/RELIANCE.NS?asset_type=stock" -H "Authorization: Bearer $TOKEN"
+
+Show the full output.
