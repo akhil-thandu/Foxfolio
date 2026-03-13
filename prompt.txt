@@ -1,3 +1,9 @@
+We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend.
+
+Rewrite two files exactly as specified below.
+
+STEP 1 — Rewrite backend/app/services/analytics_service.py with this exact content:
+
 from sqlalchemy.orm import Session
 from app.db.models import Account, Holding
 from app.services.price_service import get_price
@@ -61,3 +67,53 @@ async def get_allocation(db: Session) -> dict:
         "by_account": by_account,
         "by_currency": by_currency
     }
+
+
+STEP 2 — Rewrite backend/app/api/v1/analytics.py with this exact content:
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.services.analytics_service import get_allocation
+
+router = APIRouter()
+
+@router.get("/allocation")
+async def allocation(db: Session = Depends(get_db)):
+    result = await get_allocation(db)
+    return {
+        "success": True,
+        "data": result
+    }
+
+@router.get("/exposure")
+async def exposure():
+    return {
+        "success": True,
+        "data": {
+            "message": "Effective exposure coming in next iteration",
+            "direct_holdings": [],
+            "etf_exposure": []
+        }
+    }
+
+
+STEP 3 — Start the backend server and confirm no errors:
+cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --reload --port 8001
+
+Confirm it starts cleanly then stop it.
+
+STEP 4 — Run these tests:
+
+cd C:/Logan/Projects/Foxfolio/backend
+
+Test 1 — Login and save token:
+curl -s -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d "{\"password\": \"logandev123\"}" > token.json
+
+Test 2 — Get allocation breakdown:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/analytics/allocation -H "Authorization: Bearer $TOKEN"
+
+Test 3 — Get exposure stub:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/analytics/exposure -H "Authorization: Bearer $TOKEN"
+
+Report the full output of every step. Stop immediately if any step fails.
