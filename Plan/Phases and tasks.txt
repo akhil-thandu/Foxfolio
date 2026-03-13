@@ -12,8 +12,7 @@ PHASE 2 — BACKEND CORE
 ✅ 9. Integrate CoinGecko API client for crypto prices
 ✅ 10. Implement Redis caching layer for prices (5 min expiry)
 ✅ 11. Implement API waterfall — Finnhub → Twelve Data → yfinance fallback
-
-12. Implement USD/INR currency conversion service
+✅ 12. Implement USD/INR currency conversion service
 
 13. Implement portfolio summary endpoint — net worth, daily change, P&L calculations
 14. Implement portfolio history endpoint — query daily snapshots

@@ -1,19 +1,78 @@
-Fix backend/app/external/yfinance_client.py. The fast_info object uses attribute access, not dict .get(). Rewrite it with this exact content:
+We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend.
 
-import yfinance as yf
+Rewrite one file as specified below.
 
-def fetch_price_yfinance(ticker: str) -> float | None:
+STEP 1 — Rewrite backend/app/services/currency_service.py with this exact content:
+
+import httpx
+from app.cache.redis import get_cached_exchange_rate, set_cached_exchange_rate
+
+FRANKFURTER_BASE = "https://api.frankfurter.app"
+
+async def get_usd_to_inr() -> float | None:
+    cached = get_cached_exchange_rate("USD_INR")
+    if cached:
+        return float(cached)
+
     try:
-        t = yf.Ticker(ticker)
-        info = t.fast_info
-        price = getattr(info, "last_price", None) or getattr(info, "regular_market_price", None)
-        if price and price > 0:
-            return float(price)
-        return None
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{FRANKFURTER_BASE}/latest",
+                params={"from": "USD", "to": "INR"}
+            )
+            data = response.json()
+            rate = data.get("rates", {}).get("INR")
+            if rate:
+                set_cached_exchange_rate("USD_INR", rate)
+                return float(rate)
+            return None
     except Exception:
         return None
 
-After saving the file, re-run Test 5 only:
-TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s "http://localhost:8001/api/v1/prices/RELIANCE.NS?asset_type=stock" -H "Authorization: Bearer $TOKEN"
+async def convert_inr_to_usd(inr_amount: float) -> float | None:
+    rate = await get_usd_to_inr()
+    if rate is None:
+        return None
+    return round(inr_amount / rate, 2)
 
-Show the full output.
+async def convert_usd_to_inr(usd_amount: float) -> float | None:
+    rate = await get_usd_to_inr()
+    if rate is None:
+        return None
+    return round(usd_amount * rate, 2)
+
+
+STEP 2 — Start the backend server and confirm no errors:
+cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --reload --port 8001
+
+Confirm it starts cleanly then stop it.
+
+STEP 3 — Run these tests:
+
+cd C:/Logan/Projects/Foxfolio/backend
+
+Test 1 — Login and save token:
+curl -s -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d "{\"password\": \"logandev123\"}" > token.json
+
+Test 2 — Test the currency service directly in Python:
+cd C:/Logan/Projects/Foxfolio/backend && python -c "
+import asyncio
+from app.services.currency_service import get_usd_to_inr, convert_usd_to_inr, convert_inr_to_usd
+
+async def test():
+    rate = await get_usd_to_inr()
+    print(f'USD/INR rate: {rate}')
+
+    usd_to_inr = await convert_usd_to_inr(100)
+    print(f'100 USD = {usd_to_inr} INR')
+
+    inr_to_usd = await convert_inr_to_usd(8000)
+    print(f'8000 INR = {inr_to_usd} USD')
+
+    rate_cached = await get_usd_to_inr()
+    print(f'Second call (should be cached): {rate_cached}')
+
+asyncio.run(test())
+"
+
+Report the full output of every step. Stop immediately if any step fails.
