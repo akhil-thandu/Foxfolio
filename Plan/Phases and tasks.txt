@@ -4,7 +4,7 @@
 ✅ 3. Implement JWT authentication — login, refresh token, logout endpoints
 ✅ 4. Protect all API routes with auth middleware
 
-PHASE 2 — BACKEND CORE
+✔ PHASE 2 — BACKEND CORE
 ✅ 5. Implement GET /accounts and GET /accounts/{id} endpoints
 ✅ 6. Implement full holdings CRUD — get, create, update, delete
 ✅ 7. Implement transactions endpoints — get, create, delete
@@ -17,8 +17,7 @@ PHASE 2 — BACKEND CORE
 ✅ 14. Implement portfolio history endpoint — query daily snapshots
 ✅ 16. Implement TWR calculation for portfolio snapshots
 ✅ 15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
-
-17. Implement analytics endpoints — allocation breakdown, effective exposure
+✅ 17. Implement analytics endpoints — allocation breakdown, effective exposure
 
 PHASE 3 — FRONTEND FOUNDATION
 18. Build Sidebar component with navigation links
