@@ -1,11 +1,25 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.services.analytics_service import get_allocation
 
 router = APIRouter()
 
 @router.get("/allocation")
-def get_allocation():
-    return {"message": "allocation - coming soon"}
+async def allocation(db: Session = Depends(get_db)):
+    result = await get_allocation(db)
+    return {
+        "success": True,
+        "data": result
+    }
 
 @router.get("/exposure")
-def get_exposure():
-    return {"message": "exposure - coming soon"}
+async def exposure():
+    return {
+        "success": True,
+        "data": {
+            "message": "Effective exposure coming in next iteration",
+            "direct_holdings": [],
+            "etf_exposure": []
+        }
+    }

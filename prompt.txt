@@ -1,255 +1,119 @@
 We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend.
 
-Rewrite and create files exactly as specified below. Do all steps in order.
+Rewrite two files exactly as specified below.
 
-STEP 1 — Rewrite backend/app/core/scheduler.py with this exact content:
+STEP 1 — Rewrite backend/app/services/analytics_service.py with this exact content:
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from datetime import datetime, date, timezone
 from sqlalchemy.orm import Session
-from app.db.database import SessionLocal
-from app.db.models import Holding, PortfolioSnapshot, IntradaySnapshot
+from app.db.models import Account, Holding
 from app.services.price_service import get_price
-from app.services.currency_service import get_usd_to_inr, convert_usd_to_inr
-from app.services.portfolio_service import get_portfolio_summary, calculate_twr
-from app.cache.redis import set_cached_price
-import pytz
-import logging
+from app.services.currency_service import convert_inr_to_usd
 
-logger = logging.getLogger(__name__)
+async def get_allocation(db: Session) -> dict:
+    holdings = db.query(Holding).all()
+    accounts = db.query(Account).all()
+    account_map = {str(a.id): a for a in accounts}
 
-scheduler = AsyncIOScheduler()
+    by_asset_type = {}
+    by_account = {}
+    by_currency = {}
+    total_usd = 0.0
 
-US_MARKET_TZ = pytz.timezone("America/New_York")
+    holding_values = []
+    for h in holdings:
+        price_data = await get_price(h.ticker, h.asset_type)
+        price = price_data["price"] or 0
+        value = price * float(h.quantity)
 
-def is_us_market_open() -> bool:
-    now = datetime.now(US_MARKET_TZ)
-    if now.weekday() >= 5:
-        return False
-    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-    return market_open <= now <= market_close
+        if h.currency == "INR":
+            value_usd = await convert_inr_to_usd(value) or 0
+        else:
+            value_usd = value
 
-async def refresh_prices_job():
-    db: Session = SessionLocal()
-    try:
-        holdings = db.query(Holding).all()
-        if not holdings:
-            return
+        holding_values.append({
+            "holding": h,
+            "value_usd": value_usd
+        })
+        total_usd += value_usd
 
-        for holding in holdings:
-            is_us = holding.asset_type in ("stock", "etf") and not holding.ticker.endswith(".NS")
-            is_crypto = holding.asset_type == "crypto"
-            is_indian = holding.ticker.endswith(".NS")
+    for hv in holding_values:
+        h = hv["holding"]
+        value_usd = hv["value_usd"]
+        pct = round((value_usd / total_usd * 100), 2) if total_usd > 0 else 0
 
-            if is_us and not is_us_market_open():
-                continue
+        asset_type = h.asset_type
+        if asset_type not in by_asset_type:
+            by_asset_type[asset_type] = {"value_usd": 0.0, "percent": 0.0}
+        by_asset_type[asset_type]["value_usd"] += round(value_usd, 2)
 
-            price_data = await get_price(holding.ticker, holding.asset_type)
-            if price_data["price"]:
-                set_cached_price(holding.ticker, price_data["price"])
+        account = account_map.get(str(h.account_id))
+        account_name = account.name if account else "Unknown"
+        if account_name not in by_account:
+            by_account[account_name] = {"value_usd": 0.0, "percent": 0.0}
+        by_account[account_name]["value_usd"] += round(value_usd, 2)
 
-        logger.info(f"Price refresh completed for {len(holdings)} holdings")
-    except Exception as e:
-        logger.error(f"Price refresh job failed: {e}")
-    finally:
-        db.close()
+        currency = h.currency
+        if currency not in by_currency:
+            by_currency[currency] = {"value_usd": 0.0, "percent": 0.0}
+        by_currency[currency]["value_usd"] += round(value_usd, 2)
 
-async def write_intraday_snapshot_job():
-    db: Session = SessionLocal()
-    try:
-        summary = await get_portfolio_summary(db)
-        total_usd = summary["total_value_usd"]
-        total_inr = summary["total_value_inr"]
+    for group in [by_asset_type, by_account, by_currency]:
+        for key in group:
+            group[key]["percent"] = round((group[key]["value_usd"] / total_usd * 100), 2) if total_usd > 0 else 0
 
-        snapshot = IntradaySnapshot(
-            captured_at=datetime.now(timezone.utc),
-            total_value_usd=total_usd,
-            total_value_inr=total_inr
-        )
-        db.add(snapshot)
-        db.commit()
-        logger.info(f"Intraday snapshot written: ${total_usd}")
-    except Exception as e:
-        logger.error(f"Intraday snapshot job failed: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-async def write_daily_snapshot_job():
-    db: Session = SessionLocal()
-    try:
-        existing = db.query(PortfolioSnapshot).filter(
-            PortfolioSnapshot.snapshot_date == date.today()
-        ).first()
-        if existing:
-            logger.info("Daily snapshot already exists for today, skipping")
-            return
-
-        summary = await get_portfolio_summary(db)
-        total_usd = summary["total_value_usd"]
-        total_inr = summary["total_value_inr"]
-        twr = calculate_twr(db, total_usd)
-
-        snapshot = PortfolioSnapshot(
-            snapshot_date=date.today(),
-            total_value_usd=total_usd,
-            total_value_inr=total_inr,
-            twr=twr
-        )
-        db.add(snapshot)
-        db.commit()
-        logger.info(f"Daily snapshot written: ${total_usd}, TWR: {twr}")
-    except Exception as e:
-        logger.error(f"Daily snapshot job failed: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-async def refresh_exchange_rate_job():
-    try:
-        rate = await get_usd_to_inr()
-        logger.info(f"Exchange rate refreshed: USD/INR = {rate}")
-    except Exception as e:
-        logger.error(f"Exchange rate refresh failed: {e}")
-
-async def cleanup_intraday_snapshots_job():
-    db: Session = SessionLocal()
-    try:
-        from datetime import timedelta
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-        deleted = db.query(IntradaySnapshot).filter(
-            IntradaySnapshot.captured_at < cutoff
-        ).delete()
-        db.commit()
-        logger.info(f"Cleaned up {deleted} old intraday snapshots")
-    except Exception as e:
-        logger.error(f"Intraday cleanup job failed: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-def start_scheduler():
-    scheduler.add_job(
-        refresh_prices_job,
-        trigger=IntervalTrigger(minutes=5),
-        id="refresh_prices",
-        replace_existing=True
-    )
-    scheduler.add_job(
-        write_intraday_snapshot_job,
-        trigger=IntervalTrigger(minutes=1),
-        id="intraday_snapshot",
-        replace_existing=True
-    )
-    scheduler.add_job(
-        write_daily_snapshot_job,
-        trigger=IntervalTrigger(hours=24),
-        id="daily_snapshot",
-        replace_existing=True
-    )
-    scheduler.add_job(
-        refresh_exchange_rate_job,
-        trigger=IntervalTrigger(hours=1),
-        id="exchange_rate",
-        replace_existing=True
-    )
-    scheduler.add_job(
-        cleanup_intraday_snapshots_job,
-        trigger=IntervalTrigger(hours=1),
-        id="cleanup_intraday",
-        replace_existing=True
-    )
-    scheduler.start()
-    logger.info("Scheduler started with 5 jobs")
+    return {
+        "total_value_usd": round(total_usd, 2),
+        "by_asset_type": by_asset_type,
+        "by_account": by_account,
+        "by_currency": by_currency
+    }
 
 
-STEP 2 — Rewrite backend/app/main.py with this exact content:
+STEP 2 — Rewrite backend/app/api/v1/analytics.py with this exact content:
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from contextlib import asynccontextmanager
-from app.config import settings
-from app.core.middleware import auth_middleware
-from app.core.scheduler import start_scheduler, scheduler
-from app.api.v1 import auth, portfolio, accounts, holdings, transactions, prices, analytics, settings as settings_router
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.services.analytics_service import get_allocation
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    start_scheduler()
-    yield
-    scheduler.shutdown()
+router = APIRouter()
 
-app = FastAPI(
-    title="Foxfolio API",
-    description="Personal Portfolio Manager API",
-    version="1.0.0",
-    lifespan=lifespan
-)
+@router.get("/allocation")
+async def allocation(db: Session = Depends(get_db)):
+    result = await get_allocation(db)
+    return {
+        "success": True,
+        "data": result
+    }
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.cors_origin],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
-
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["portfolio"])
-app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["accounts"])
-app.include_router(holdings.router, prefix="/api/v1/accounts", tags=["holdings"])
-app.include_router(transactions.router, prefix="/api/v1/accounts", tags=["transactions"])
-app.include_router(prices.router, prefix="/api/v1/prices", tags=["prices"])
-app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
-app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["settings"])
-
-@app.get("/")
-def root():
-    return {"message": "🦊 Foxfolio API is running", "version": "1.0.0"}
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+@router.get("/exposure")
+async def exposure():
+    return {
+        "success": True,
+        "data": {
+            "message": "Effective exposure coming in next iteration",
+            "direct_holdings": [],
+            "etf_exposure": []
+        }
+    }
 
 
-STEP 3 — Install pytz which is required by the scheduler:
-cd C:/Logan/Projects/Foxfolio/backend && pip install pytz && pip freeze | grep pytz
-
-STEP 4 — Add pytz to requirements.txt:
-Add the line "pytz>=2024.1" to backend/requirements.txt
-
-STEP 5 — Start the backend server and confirm scheduler starts cleanly:
+STEP 3 — Start the backend server and confirm no errors:
 cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --reload --port 8001
 
-Let it run for 10 seconds and confirm you see:
-- "Scheduler started with 5 jobs" in logs
-- No errors or exceptions
+Confirm it starts cleanly then stop it.
 
-Then stop it.
-
-STEP 6 — Run a quick verification test:
+STEP 4 — Run these tests:
 
 cd C:/Logan/Projects/Foxfolio/backend
 
-Test 1 — Login:
+Test 1 — Login and save token:
 curl -s -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d "{\"password\": \"logandev123\"}" > token.json
 
-Test 2 — Start server, wait 70 seconds for intraday snapshot job to run, then check intraday snapshots table:
-Start the server in background, wait 70 seconds, then run:
-cd C:/Logan/Projects/Foxfolio/backend && python -c "
-from app.db.database import SessionLocal
-from app.db.models import IntradaySnapshot
-db = SessionLocal()
-snapshots = db.query(IntradaySnapshot).all()
-print(f'Intraday snapshots count: {len(snapshots)}')
-for s in snapshots:
-    print(f'  {s.captured_at} — USD: {s.total_value_usd}, INR: {s.total_value_inr}')
-db.close()
-"
+Test 2 — Get allocation breakdown:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/analytics/allocation -H "Authorization: Bearer $TOKEN"
+
+Test 3 — Get exposure stub:
+TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/analytics/exposure -H "Authorization: Bearer $TOKEN"
 
 Report the full output of every step. Stop immediately if any step fails.
