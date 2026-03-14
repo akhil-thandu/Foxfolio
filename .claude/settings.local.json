@@ -29,7 +29,9 @@
       "Bash(cmd.exe /c \"taskkill /F /PID 14524\" && sleep 2 && echo \"Killed\")",
       "Bash(sleep 4 && powershell.exe -NoProfile -Command \"netstat -ano | Select-String ':8001|:3000'\")",
       "Bash(powershell.exe -NoProfile -Command \"Stop-Process -Id 14524 -Force; Start-Sleep 2; netstat -ano | Select-String ':8001'\")",
-      "Bash(cd C:/Logan/Projects/Foxfolio/frontend && npm run dev)"
+      "Bash(cd C:/Logan/Projects/Foxfolio/frontend && npm run dev)",
+      "Bash(cd:*)",
+      "Bash(del:*)"
     ]
   }
 }

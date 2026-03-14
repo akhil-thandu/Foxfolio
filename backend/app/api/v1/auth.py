@@ -23,8 +23,8 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=True,
+        samesite="none",
         max_age=7 * 24 * 60 * 60
     )
 
