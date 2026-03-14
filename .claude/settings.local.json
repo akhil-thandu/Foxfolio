@@ -15,7 +15,9 @@
       "Bash(taskkill //PID 14944 //F)",
       "Bash(curl -s \"http://localhost:8001/openapi.json\" | python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(m, p\\) for p,v in d['paths'].items\\(\\) for m in v]\" 2>/dev/null | grep -i auth)",
       "Bash(cd C:/Logan/Projects/Foxfolio/backend && pip install pytz && pip freeze | grep pytz)",
-      "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force\"; sleep 2 && netstat -ano | grep 8001 | grep LISTEN | wc -l)"
+      "Bash(powershell -Command \"Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force\"; sleep 2 && netstat -ano | grep 8001 | grep LISTEN | wc -l)",
+      "Bash(cd C:/Logan/Projects/Foxfolio/backend && python -c \"\nfrom app.db.database import SessionLocal\nfrom app.db.models import Holding, Transaction, IntradaySnapshot, PortfolioSnapshot\n\ndb = SessionLocal\\(\\)\ntry:\n    transactions_deleted = db.query\\(Transaction\\).delete\\(\\)\n    holdings_deleted = db.query\\(Holding\\).delete\\(\\)\n    intraday_deleted = db.query\\(IntradaySnapshot\\).delete\\(\\)\n    snapshots_deleted = db.query\\(PortfolioSnapshot\\).delete\\(\\)\n    db.commit\\(\\)\n    print\\('Cleanup complete.'\\)\n    print\\(f'  Transactions deleted: {transactions_deleted}'\\)\n    print\\(f'  Holdings deleted: {holdings_deleted}'\\)\n    print\\(f'  Intraday snapshots deleted: {intraday_deleted}'\\)\n    print\\(f'  Portfolio snapshots deleted: {snapshots_deleted}'\\)\nexcept Exception as e:\n    db.rollback\\(\\)\n    print\\(f'Cleanup failed: {e}'\\)\n    raise\nfinally:\n    db.close\\(\\)\n\")",
+      "Bash(net start:*)"
     ]
   }
 }

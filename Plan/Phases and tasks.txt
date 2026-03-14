@@ -20,9 +20,11 @@
 ✅ 17. Implement analytics endpoints — allocation breakdown, effective exposure
 
 PHASE 3 — FRONTEND FOUNDATION
+
 18. Build Sidebar component with navigation links
 19. Build Topbar component with currency toggle and refresh indicator
 20. Build Dashboard layout wrapping sidebar + topbar
+
 21. Build Login page UI — two panel layout, password form, JWT auth flow
 22. Connect Login page to backend auth API
 
