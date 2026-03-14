@@ -1,42 +1,238 @@
-We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend.
+We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/frontend.
 
-Run this cleanup script to wipe all test data from holdings and transactions tables, while keeping the user, accounts, and settings rows intact.
+Create and rewrite files exactly as specified below. Do all steps in order.
 
-Run this command:
-cd C:/Logan/Projects/Foxfolio/backend && python -c "
-from app.db.database import SessionLocal
-from app.db.models import Holding, Transaction, IntradaySnapshot, PortfolioSnapshot
+STEP 1 — Create frontend/components/layout/Sidebar.tsx with this exact content:
 
-db = SessionLocal()
-try:
-    transactions_deleted = db.query(Transaction).delete()
-    holdings_deleted = db.query(Holding).delete()
-    intraday_deleted = db.query(IntradaySnapshot).delete()
-    snapshots_deleted = db.query(PortfolioSnapshot).delete()
-    db.commit()
-    print('Cleanup complete.')
-    print(f'  Transactions deleted: {transactions_deleted}')
-    print(f'  Holdings deleted: {holdings_deleted}')
-    print(f'  Intraday snapshots deleted: {intraday_deleted}')
-    print(f'  Portfolio snapshots deleted: {snapshots_deleted}')
-except Exception as e:
-    db.rollback()
-    print(f'Cleanup failed: {e}')
-    raise
-finally:
-    db.close()
-"
+"use client";
 
-Then verify the tables are empty:
-cd C:/Logan/Projects/Foxfolio/backend && python -c "
-from app.db.database import SessionLocal
-from app.db.models import User, Account, Holding, Transaction, Settings
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import {
+  LayoutDashboard,
+  Briefcase,
+  BarChart2,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  Bitcoin,
+  IndianRupee,
+} from "lucide-react";
 
-db = SessionLocal()
-print('Users:', db.query(User).count())
-print('Accounts:', db.query(Account).count())
-print('Holdings:', db.query(Holding).count())
-print('Transactions:', db.query(Transaction).count())
-print('Settings:', db.query(Settings).count())
-db.close()
-"
+const NAV_ITEMS = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Accounts",
+    href: "/accounts",
+    icon: Briefcase,
+    children: [
+      { label: "Groww", href: "/accounts/indian", icon: IndianRupee },
+      { label: "Robinhood", href: "/accounts/robinhood", icon: TrendingUp },
+      { label: "Crypto", href: "/accounts/crypto", icon: Bitcoin },
+    ],
+  },
+  {
+    label: "Analytics",
+    href: "/analytics",
+    icon: BarChart2,
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+  },
+];
+
+export default function Sidebar() {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+
+  return (
+    <aside
+      className={`relative flex flex-col bg-bg-surface border-r border-border-subtle transition-all duration-300 ${
+        collapsed ? "w-16" : "w-60"
+      }`}
+      style={{ minHeight: "100vh" }}
+    >
+      {/* Logo */}
+      <div className={`flex items-center gap-3 px-4 py-6 ${collapsed ? "justify-center" : ""}`}>
+        <span className="text-2xl">🦊</span>
+        {!collapsed && (
+          <span className="font-mono font-bold text-text-primary tracking-wide text-lg">
+            FOXFOLIO
+          </span>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-2 space-y-1">
+        {NAV_ITEMS.map((item) => (
+          <div key={item.href}>
+            <Link
+              href={item.href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors relative group ${
+                isActive(item.href)
+                  ? "text-text-primary bg-bg-raised border-l-2 border-accent-violet"
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-raised"
+              } ${collapsed ? "justify-center" : ""}`}
+            >
+              <item.icon size={18} className="shrink-0" />
+              {!collapsed && (
+                <span className="text-sm font-medium">{item.label}</span>
+              )}
+            </Link>
+
+            {/* Children */}
+            {!collapsed && item.children && (
+              <div className="ml-4 mt-1 space-y-1 border-l border-border-subtle pl-3">
+                {item.children.map((child) => (
+                  <Link
+                    key={child.href}
+                    href={child.href}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
+                      isActive(child.href)
+                        ? "text-text-primary bg-bg-raised border-l-2 border-accent-violet"
+                        : "text-text-secondary hover:text-text-primary hover:bg-bg-raised"
+                    }`}
+                  >
+                    <child.icon size={15} className="shrink-0" />
+                    <span>{child.label}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </nav>
+
+      {/* Collapse toggle */}
+      <div className="p-3 border-t border-border-subtle">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className={`flex items-center justify-center w-full py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-raised transition-colors ${
+            collapsed ? "" : "gap-2"
+          }`}
+        >
+          {collapsed ? <ChevronRight size={16} /> : (
+            <>
+              <ChevronLeft size={16} />
+              <span className="text-xs">Collapse</span>
+            </>
+          )}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+
+STEP 2 — Create frontend/components/layout/Topbar.tsx with this exact content:
+
+"use client";
+
+import { useState } from "react";
+import { RefreshCw, Clock } from "lucide-react";
+
+export default function Topbar() {
+  const [currency, setCurrency] = useState<"USD" | "INR">("USD");
+
+  return (
+    <header className="h-16 bg-bg-surface border-b border-border-subtle flex items-center justify-between px-6 sticky top-0 z-10">
+      {/* Left — refresh indicator */}
+      <div className="flex items-center gap-2 text-text-secondary text-sm">
+        <Clock size={14} />
+        <span className="font-mono text-xs">Last updated: --:--</span>
+        <span className="flex items-center gap-1 text-xs text-accent-cyan">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan inline-block animate-pulse" />
+          Live
+        </span>
+      </div>
+
+      {/* Right — currency toggle */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center bg-bg-raised border border-border-subtle rounded-lg p-1">
+          <button
+            onClick={() => setCurrency("USD")}
+            className={`px-3 py-1 rounded-md text-sm font-mono transition-colors ${
+              currency === "USD"
+                ? "bg-accent-violet text-white"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            USD
+          </button>
+          <button
+            onClick={() => setCurrency("INR")}
+            className={`px-3 py-1 rounded-md text-sm font-mono transition-colors ${
+              currency === INR"
+                ? "bg-accent-violet text-white"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            INR
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+
+STEP 3 — Rewrite frontend/app/(dashboard)/layout.tsx with this exact content:
+
+import Sidebar from "@/components/layout/Sidebar";
+import Topbar from "@/components/layout/Topbar";
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-bg-primary flex">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Topbar />
+        <main className="flex-1 p-6 overflow-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+
+STEP 4 — Rewrite frontend/app/(dashboard)/dashboard/page.tsx with this exact content:
+
+export default function DashboardPage() {
+  return (
+    <div className="text-text-primary">
+      <h1 className="text-2xl font-bold mb-2">Dashboard</h1>
+      <p className="text-text-secondary text-sm">Portfolio overview coming soon.</p>
+    </div>
+  );
+}
+
+
+STEP 5 — Make sure lucide-react is installed:
+cd C:/Logan/Projects/Foxfolio/frontend && npm list lucide-react
+
+If not installed run:
+cd C:/Logan/Projects/Foxfolio/frontend && npm install lucide-react
+
+STEP 6 — Start the frontend and confirm no errors:
+cd C:/Logan/Projects/Foxfolio/frontend && npm run dev
+
+Let it compile and confirm no TypeScript or build errors. Then stop it.
+
+STEP 7 — Start both backend and frontend and confirm they both run cleanly together:
+Start backend: cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --port 8001
+Start frontend: cd C:/Logan/Projects/Foxfolio/frontend && npm run dev
+
+Confirm both are running, then stop both.
+
+Report the full output of every step. Stop and report immediately if any step fails.
