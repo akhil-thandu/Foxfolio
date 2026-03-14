@@ -80,7 +80,7 @@ export default function PortfolioGraph({ data, currency, loading }: Props) {
             fontSize: "12px",
             color: "#F0F0FF",
           }}
-          formatter={(value: number) => [formatValue(value, currency), "Value"]}
+          formatter={(value) => [formatValue(Number(value ?? 0), currency), "Value"]}
           labelStyle={{ color: "#7070A0" }}
         />
         <Area

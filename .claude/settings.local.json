@@ -31,7 +31,13 @@
       "Bash(powershell.exe -NoProfile -Command \"Stop-Process -Id 14524 -Force; Start-Sleep 2; netstat -ano | Select-String ':8001'\")",
       "Bash(cd C:/Logan/Projects/Foxfolio/frontend && npm run dev)",
       "Bash(cd:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Read(//c/Logan/Projects/Foxfolio/**)",
+      "Bash(echo \"EXISTS: $f\")",
+      "Bash(echo \"NEW: $f\")",
+      "Bash(done)"
     ]
   }
 }

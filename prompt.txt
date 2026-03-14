@@ -1,45 +1,27 @@
 We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/frontend.
+Do NOT stop any running servers. Just create and rewrite files.
 
 Create and rewrite files exactly as specified below. Do all steps in order.
 
-STEP 1 — Create frontend/store/portfolio.ts with this exact content:
+STEP 1 — Create frontend/hooks/useHoldings.ts with this exact content:
 
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
-
-interface PortfolioStore {
-  currency: "USD" | "INR";
-  setCurrency: (currency: "USD" | "INR") => void;
-}
-
-export const usePortfolioStore = create<PortfolioStore>()(
-  persist(
-    (set) => ({
-      currency: "USD",
-      setCurrency: (currency) => set({ currency }),
-    }),
-    {
-      name: "foxfolio-preferences",
-    }
-  )
-);
-
-
-STEP 2 — Create frontend/hooks/usePortfolio.ts with this exact content:
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
+import { HoldingSummary } from "@/hooks/usePortfolio";
 
-export interface AccountSummary {
+export interface Transaction {
   id: string;
-  name: string;
-  account_type: string;
-  currency: string;
-  total_value_usd: number;
-  total_value_inr: number;
+  holding_id: string;
+  transaction_type: "buy" | "sell" | "dividend" | "reward" | "staking_earning";
+  quantity: number | null;
+  price_per_unit: number | null;
+  total_value: number;
+  transaction_date: string;
+  notes: string | null;
+  created_at: string;
 }
 
-export interface HoldingSummary {
+export interface HoldingDetail {
   id: string;
   account_id: string;
   ticker: string;
@@ -47,146 +29,74 @@ export interface HoldingSummary {
   asset_type: string;
   quantity: number;
   avg_buy_price: number;
-  current_price: number;
   currency: string;
-  total_value: number;
-  cost_basis: number;
-  pnl: number;
-  pnl_percent: number;
-  price_fresh: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface PortfolioSummary {
-  total_value_usd: number;
-  total_value_inr: number;
-  daily_change_usd: number | null;
-  daily_change_percent: number | null;
-  accounts: AccountSummary[];
-  holdings: HoldingSummary[];
-}
-
-export interface SnapshotPoint {
-  date?: string;
-  timestamp?: string;
-  value_usd: number;
-  value_inr: number;
-  twr?: number;
-}
-
-export function usePortfolioSummary() {
-  const [data, setData] = useState<PortfolioSummary | null>(null);
+export function useAccountHoldings(accountId: string | null) {
+  const [data, setData] = useState<HoldingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetch() {
-      try {
-        const res = await api.get("/api/v1/portfolio/summary");
-        setData(res.data.data);
-      } catch (err) {
-        setError("Failed to load portfolio");
-      } finally {
-        setLoading(false);
-      }
+  const fetch = useCallback(async () => {
+    if (!accountId) return;
+    setLoading(true);
+    try {
+      const res = await api.get(`/api/v1/accounts/${accountId}/holdings`);
+      setData(res.data.data);
+    } catch {
+      setError("Failed to load holdings");
+    } finally {
+      setLoading(false);
     }
-    fetch();
-  }, []);
+  }, [accountId]);
 
-  return { data, loading, error };
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
+
+  return { data, loading, error, refetch: fetch };
 }
 
-export function usePortfolioHistory(range: string) {
-  const [data, setData] = useState<SnapshotPoint[]>([]);
+export function useTransactions(accountId: string | null, holdingId: string | null) {
+  const [data, setData] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetch() {
-      setLoading(true);
-      try {
-        const res = await api.get(`/api/v1/portfolio/history?range=${range}`);
-        setData(res.data.data);
-      } catch (err) {
-        setError("Failed to load history");
-      } finally {
-        setLoading(false);
-      }
+  const fetch = useCallback(async () => {
+    if (!accountId || !holdingId) return;
+    setLoading(true);
+    try {
+      const res = await api.get(`/api/v1/accounts/${accountId}/holdings/${holdingId}/transactions`);
+      setData(res.data.data);
+    } catch {
+      setError("Failed to load transactions");
+    } finally {
+      setLoading(false);
     }
-    fetch();
-  }, [range]);
+  }, [accountId, holdingId]);
 
-  return { data, loading, error };
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
+
+  return { data, loading, error, refetch: fetch };
 }
 
 
-STEP 3 — Update frontend/components/layout/Topbar.tsx to use the Zustand store for currency. Rewrite it with this exact content:
+STEP 2 — Create frontend/components/holdings/HoldingsList.tsx with this exact content:
 
 "use client";
 
-import { Clock } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { HoldingSummary } from "@/hooks/usePortfolio";
 import { usePortfolioStore } from "@/store/portfolio";
 
-export default function Topbar() {
-  const { currency, setCurrency } = usePortfolioStore();
-
-  return (
-    <header className="h-16 bg-bg-surface border-b border-border-subtle flex items-center justify-between px-6 sticky top-0 z-10">
-      <div className="flex items-center gap-2 text-text-secondary text-sm">
-        <Clock size={14} />
-        <span className="font-mono text-xs">Last updated: --:--</span>
-        <span className="flex items-center gap-1 text-xs text-accent-cyan">
-          <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan inline-block animate-pulse" />
-          Live
-        </span>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center bg-bg-raised border border-border-subtle rounded-lg p-1">
-          <button
-            onClick={() => setCurrency("USD")}
-            className={`px-3 py-1 rounded-md text-sm font-mono transition-colors ${
-              currency === "USD"
-                ? "bg-accent-violet text-white"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            USD
-          </button>
-          <button
-            onClick={() => setCurrency("INR")}
-            className={`px-3 py-1 rounded-md text-sm font-mono transition-colors ${
-              currency === "INR"
-                ? "bg-accent-violet text-white"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            INR
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-
-STEP 4 — Create frontend/components/charts/PortfolioGraph.tsx with this exact content:
-
-"use client";
-
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import { SnapshotPoint } from "@/hooks/usePortfolio";
-
 interface Props {
-  data: SnapshotPoint[];
-  currency: "USD" | "INR";
+  holdings: HoldingSummary[];
   loading: boolean;
+  accountType: string;
 }
 
 function formatValue(value: number, currency: "USD" | "INR") {
@@ -196,231 +106,448 @@ function formatValue(value: number, currency: "USD" | "INR") {
   return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function formatLabel(point: SnapshotPoint) {
-  const raw = point.date || point.timestamp;
-  if (!raw) return "";
-  const d = new Date(raw);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function getAccountPath(accountType: string) {
+  if (accountType === "indian_broker") return "indian";
+  if (accountType === "robinhood") return "robinhood";
+  if (accountType === "crypto") return "crypto";
+  return "indian";
 }
 
-export default function PortfolioGraph({ data, currency, loading }: Props) {
+export default function HoldingsList({ holdings, loading, accountType }: Props) {
+  const router = useRouter();
+  const { currency } = usePortfolioStore();
+
   if (loading) {
     return (
-      <div className="h-64 bg-bg-raised rounded-xl animate-pulse" />
-    );
-  }
-
-  if (!data || data.length === 0) {
-    return (
-      <div className="h-64 bg-bg-raised rounded-xl flex items-center justify-center">
-        <p className="text-text-secondary text-sm">No historical data yet. Check back tomorrow.</p>
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-16 bg-bg-raised rounded-xl animate-pulse border border-border-subtle" />
+        ))}
       </div>
     );
   }
 
-  const valueKey = currency === "USD" ? "value_usd" : "value_inr";
-  const chartData = data.map((point) => ({
-    label: formatLabel(point),
-    value: point[valueKey],
-  }));
+  if (!holdings || holdings.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-32 bg-bg-surface border border-border-subtle rounded-xl">
+        <p className="text-text-secondary text-sm">No holdings yet. Add one in Settings.</p>
+      </div>
+    );
+  }
 
-  const isPositive = chartData[chartData.length - 1]?.value >= chartData[0]?.value;
-  const lineColor = isPositive ? "#00C805" : "#FF3B30";
+  const accountPath = getAccountPath(accountType);
 
   return (
-    <ResponsiveContainer width="100%" height={256}>
-      <AreaChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id="graphGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={lineColor} stopOpacity={0.2} />
-            <stop offset="95%" stopColor={lineColor} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 11, fill: "#7070A0", fontFamily: "JetBrains Mono" }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis hide />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: "#1C1C26",
-            border: "1px solid #2D2D3D",
-            borderRadius: "8px",
-            fontFamily: "JetBrains Mono",
-            fontSize: "12px",
-            color: "#F0F0FF",
-          }}
-          formatter={(value: number) => [formatValue(value, currency), "Value"]}
-          labelStyle={{ color: "#7070A0" }}
-        />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke={lineColor}
-          strokeWidth={2}
-          fill="url(#graphGradient)"
-          dot={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="text-text-secondary text-xs uppercase tracking-wider border-b border-border-subtle">
+            <th className="text-left pb-3 font-medium">Name</th>
+            <th className="text-right pb-3 font-medium">Quantity</th>
+            <th className="text-right pb-3 font-medium">Avg Cost</th>
+            <th className="text-right pb-3 font-medium">Current</th>
+            <th className="text-right pb-3 font-medium">Value</th>
+            <th className="text-right pb-3 font-medium">P&L</th>
+          </tr>
+        </thead>
+        <tbody>
+          {holdings.map((holding) => {
+            const isPnlPositive = holding.pnl >= 0;
+            const holdingCurrency = holding.currency as "USD" | "INR";
+
+            return (
+              <tr
+                key={holding.id}
+                onClick={() => router.push(`/accounts/${accountPath}/holdings/${holding.id}`)}
+                className="border-b border-border-subtle hover:bg-bg-raised cursor-pointer transition-colors group"
+              >
+                <td className="py-4 pr-4">
+                  <div className="font-medium text-text-primary group-hover:text-accent-cyan transition-colors">
+                    {holding.name}
+                  </div>
+                  <div className="font-mono text-xs text-accent-cyan mt-0.5">{holding.ticker}</div>
+                </td>
+                <td className="py-4 text-right font-mono text-sm text-text-primary">
+                  {holding.quantity.toLocaleString()}
+                </td>
+                <td className="py-4 text-right font-mono text-sm text-text-secondary">
+                  {formatValue(holding.avg_buy_price, holdingCurrency)}
+                </td>
+                <td className="py-4 text-right font-mono text-sm text-text-primary">
+                  {holding.current_price > 0
+                    ? formatValue(holding.current_price, holdingCurrency)
+                    : <span className="text-text-secondary">--</span>
+                  }
+                </td>
+                <td className="py-4 text-right font-mono text-sm text-text-primary">
+                  {formatValue(holding.total_value, holdingCurrency)}
+                </td>
+                <td className="py-4 text-right">
+                  <div className={`font-mono text-sm ${isPnlPositive ? "text-profit" : "text-loss"}`}>
+                    {isPnlPositive ? "+" : ""}{formatValue(holding.pnl, holdingCurrency)}
+                  </div>
+                  <div className={`font-mono text-xs ${isPnlPositive ? "text-profit" : "text-loss"}`}>
+                    {isPnlPositive ? "+" : ""}{holding.pnl_percent.toFixed(2)}%
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 
-STEP 5 — Rewrite frontend/app/(dashboard)/dashboard/page.tsx with this exact content:
+STEP 3 — Create frontend/components/transactions/TransactionForm.tsx with this exact content:
 
 "use client";
 
 import { useState } from "react";
-import { TrendingUp, TrendingDown } from "lucide-react";
-import { usePortfolioSummary, usePortfolioHistory } from "@/hooks/usePortfolio";
-import { usePortfolioStore } from "@/store/portfolio";
-import PortfolioGraph from "@/components/charts/PortfolioGraph";
-import Link from "next/link";
+import { X } from "lucide-react";
+import api from "@/lib/api";
 
-const TIME_RANGES = ["1H", "1D", "1W", "1M", "3M", "1Y", "ALL"];
+interface Props {
+  accountId: string;
+  holdingId: string;
+  holdingName: string;
+  onSuccess: () => void;
+  onClose: () => void;
+}
 
-function formatValue(value: number | null, currency: "USD" | "INR") {
-  if (value === null || value === undefined) return "--";
-  if (currency === "USD") {
-    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const TRANSACTION_TYPES = ["buy", "sell", "dividend", "reward", "staking_earning"];
+const TRADE_TYPES = ["buy", "sell"];
+
+export default function TransactionForm({ accountId, holdingId, holdingName, onSuccess, onClose }: Props) {
+  const [type, setType] = useState("buy");
+  const [quantity, setQuantity] = useState("");
+  const [pricePerUnit, setPricePerUnit] = useState("");
+  const [totalValue, setTotalValue] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isTradeType = TRADE_TYPES.includes(type);
+
+  async function handleSubmit() {
+    if (!totalValue) {
+      setError("Total value is required");
+      return;
+    }
+    if (isTradeType && (!quantity || !pricePerUnit)) {
+      setError("Quantity and price per unit are required for buy/sell");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await api.post(`/api/v1/accounts/${accountId}/holdings/${holdingId}/transactions`, {
+        transaction_type: type,
+        quantity: isTradeType ? parseFloat(quantity) : null,
+        price_per_unit: isTradeType ? parseFloat(pricePerUnit) : null,
+        total_value: parseFloat(totalValue),
+        transaction_date: date,
+        notes: notes || null,
+      });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to log transaction");
+    } finally {
+      setLoading(false);
+    }
   }
-  return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function getAccountHref(accountType: string) {
-  if (accountType === "indian_broker") return "/accounts/indian";
-  if (accountType === "robinhood") return "/accounts/robinhood";
-  if (accountType === "crypto") return "/accounts/crypto";
-  return "/accounts";
-}
-
-export default function DashboardPage() {
-  const [activeRange, setActiveRange] = useState("1M");
-  const { currency } = usePortfolioStore();
-  const { data: summary, loading: summaryLoading } = usePortfolioSummary();
-  const { data: history, loading: historyLoading } = usePortfolioHistory(activeRange);
-
-  const totalValue = currency === "USD"
-    ? summary?.total_value_usd ?? null
-    : summary?.total_value_inr ?? null;
-
-  const dailyChange = currency === "USD"
-    ? summary?.daily_change_usd ?? null
-    : null;
-
-  const dailyChangePct = summary?.daily_change_percent ?? null;
-  const isPositive = dailyChange !== null ? dailyChange >= 0 : null;
 
   return (
-    <div className="text-text-primary max-w-6xl">
-      {/* Net worth */}
-      <div className="mb-6">
-        {summaryLoading ? (
-          <div className="space-y-2">
-            <div className="h-12 w-64 bg-bg-raised rounded-lg animate-pulse" />
-            <div className="h-5 w-32 bg-bg-raised rounded-lg animate-pulse" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-bg-raised border border-border-subtle rounded-2xl p-6 w-full max-w-md mx-4">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-text-primary font-semibold text-lg">Log Transaction</h2>
+            <p className="text-text-secondary text-sm mt-0.5">{holdingName}</p>
           </div>
-        ) : (
-          <>
-            <div className="font-mono text-5xl font-bold text-text-primary tracking-tight">
-              {formatValue(totalValue, currency)}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              {dailyChange !== null ? (
-                <>
-                  {isPositive ? (
-                    <TrendingUp size={16} className="text-profit" />
-                  ) : (
-                    <TrendingDown size={16} className="text-loss" />
-                  )}
-                  <span className={`font-mono text-sm ${isPositive ? "text-profit" : "text-loss"}`}>
-                    {isPositive ? "+" : ""}{formatValue(dailyChange, currency)}
-                  </span>
-                  <span className={`font-mono text-sm ${isPositive ? "text-profit" : "text-loss"}`}>
-                    ({isPositive ? "+" : ""}{dailyChangePct?.toFixed(2)}%)
-                  </span>
-                  <span className="text-text-secondary text-xs">today</span>
-                </>
-              ) : (
-                <span className="text-text-secondary text-sm">Daily change available after first snapshot</span>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Time range tabs */}
-      <div className="flex gap-1 mb-4">
-        {TIME_RANGES.map((range) => (
           <button
-            key={range}
-            onClick={() => setActiveRange(range)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
-              activeRange === range
-                ? "bg-bg-raised text-accent-cyan border border-accent-cyan"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary transition-colors"
           >
-            {range}
+            <X size={20} />
           </button>
-        ))}
-      </div>
+        </div>
 
-      {/* Portfolio graph */}
-      <div className="mb-8">
-        <PortfolioGraph
-          data={history}
-          currency={currency}
-          loading={historyLoading}
-        />
-      </div>
-
-      {/* Account summary cards */}
-      <div>
-        <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4">Accounts</h2>
-        {summaryLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-28 bg-bg-raised rounded-xl animate-pulse border border-border-subtle" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {summary?.accounts.map((account) => {
-              const value = currency === "USD" ? account.total_value_usd : account.total_value_inr;
-              return (
-                <Link
-                  key={account.id}
-                  href={getAccountHref(account.account_type)}
-                  className="p-5 bg-bg-surface border border-border-subtle rounded-xl hover:border-accent-violet transition-colors group"
+        <div className="space-y-4">
+          {/* Transaction type */}
+          <div>
+            <label className="block text-text-secondary text-xs uppercase tracking-wider mb-2">Type</label>
+            <div className="flex flex-wrap gap-2">
+              {TRANSACTION_TYPES.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setType(t)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
+                    type === t
+                      ? "bg-accent-violet text-white"
+                      : "bg-bg-surface border border-border-subtle text-text-secondary hover:text-text-primary"
+                  }`}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-text-secondary text-sm">{account.name}</span>
-                    <span className="font-mono text-xs text-text-secondary bg-bg-raised px-2 py-0.5 rounded">
-                      {account.currency}
-                    </span>
-                  </div>
-                  <div className="font-mono text-xl font-semibold text-text-primary">
-                    {formatValue(value, currency)}
-                  </div>
-                </Link>
-              );
-            })}
+                  {t.replace("_", " ")}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
+
+          {/* Quantity and price — only for buy/sell */}
+          {isTradeType && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-text-secondary text-xs uppercase tracking-wider mb-2">Quantity</label>
+                <input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full h-11 bg-bg-surface border border-border-subtle rounded-lg px-3 font-mono text-sm text-text-primary outline-none focus:border-accent-violet transition-colors placeholder:text-text-secondary"
+                />
+              </div>
+              <div>
+                <label className="block text-text-secondary text-xs uppercase tracking-wider mb-2">Price/Unit</label>
+                <input
+                  type="number"
+                  value={pricePerUnit}
+                  onChange={(e) => setPricePerUnit(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full h-11 bg-bg-surface border border-border-subtle rounded-lg px-3 font-mono text-sm text-text-primary outline-none focus:border-accent-violet transition-colors placeholder:text-text-secondary"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Total value */}
+          <div>
+            <label className="block text-text-secondary text-xs uppercase tracking-wider mb-2">Total Value</label>
+            <input
+              type="number"
+              value={totalValue}
+              onChange={(e) => setTotalValue(e.target.value)}
+              placeholder="0.00"
+              className="w-full h-11 bg-bg-surface border border-border-subtle rounded-lg px-3 font-mono text-sm text-text-primary outline-none focus:border-accent-violet transition-colors placeholder:text-text-secondary"
+            />
+          </div>
+
+          {/* Date */}
+          <div>
+            <label className="block text-text-secondary text-xs uppercase tracking-wider mb-2">Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full h-11 bg-bg-surface border border-border-subtle rounded-lg px-3 font-mono text-sm text-text-primary outline-none focus:border-accent-violet transition-colors"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-text-secondary text-xs uppercase tracking-wider mb-2">Notes (optional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional note"
+              className="w-full h-11 bg-bg-surface border border-border-subtle rounded-lg px-3 text-sm text-text-primary outline-none focus:border-accent-violet transition-colors placeholder:text-text-secondary"
+            />
+          </div>
+
+          {error && <p className="text-loss text-sm">{error}</p>}
+
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full h-12 bg-accent-violet hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-lg transition-opacity"
+          >
+            {loading ? "Logging..." : "Log Transaction"}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 
-STEP 6 — Start the frontend locally and confirm no TypeScript or build errors:
-cd C:/Logan/Projects/Foxfolio/frontend && npm run dev
+STEP 4 — Create the holding detail page at frontend/app/(dashboard)/accounts/[accountType]/holdings/[holdingId]/page.tsx with this exact content:
 
-Let it compile and report the output. Do NOT stop it — leave it running so manual testing can happen.
+"use client";
 
-Show full output.
+import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, Plus } from "lucide-react";
+import { usePortfolioSummary } from "@/hooks/usePortfolio";
+import { useTransactions } from "@/hooks/useHoldings";
+import { usePortfolioStore } from "@/store/portfolio";
+import TransactionForm from "@/components/transactions/TransactionForm";
+
+function formatValue(value: number, currency: string) {
+  if (currency === "USD") {
+    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getAccountId(accounts: any[], accountType: string) {
+  const typeMap: Record<string, string> = {
+    indian: "indian_broker",
+    robinhood: "robinhood",
+    crypto: "crypto",
+  };
+  return accounts.find((a) => a.account_type === typeMap[accountType])?.id || null;
+}
+
+export default function HoldingDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const accountType = params.accountType as string;
+  const holdingId = params.holdingId as string;
+  const { currency } = usePortfolioStore();
+  const [showForm, setShowForm] = useState(false);
+
+  const { data: summary, loading: summaryLoading } = usePortfolioSummary();
+
+  const accountId = summary ? getAccountId(summary.accounts, accountType) : null;
+  const holding = summary?.holdings.find((h) => h.id === holdingId);
+
+  const { data: transactions, loading: txLoading, refetch } = useTransactions(accountId, holdingId);
+
+  if (summaryLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 w-48 bg-bg-raised rounded animate-pulse" />
+        <div className="h-32 bg-bg-raised rounded-xl animate-pulse" />
+      </div>
+    );
+  }
+
+  if (!holding) {
+    return (
+      <div className="text-text-secondary">
+        <p>Holding not found.</p>
+      </div>
+    );
+  }
+
+  const isPnlPositive = holding.pnl >= 0;
+  const holdingCurrency = holding.currency;
+
+  return (
+    <div className="text-text-primary max-w-3xl">
+      {/* Back button */}
+      <button
+        onClick={() => router.back()}
+        className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors mb-6 text-sm"
+      >
+        <ArrowLeft size={16} />
+        Back
+      </button>
+
+      {/* Holding header */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">{holding.name}</h1>
+          <span className="font-mono text-accent-cyan text-sm">{holding.ticker}</span>
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-accent-violet hover:opacity-90 text-white text-sm font-medium rounded-lg transition-opacity"
+        >
+          <Plus size={16} />
+          Add Transaction
+        </button>
+      </div>
+
+      {/* Holding stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {[
+          { label: "Quantity", value: holding.quantity.toLocaleString(), mono: true },
+          { label: "Avg Cost", value: formatValue(holding.avg_buy_price, holdingCurrency), mono: true },
+          { label: "Current Price", value: holding.current_price > 0 ? formatValue(holding.current_price, holdingCurrency) : "--", mono: true },
+          { label: "Total Value", value: formatValue(holding.total_value, holdingCurrency), mono: true },
+        ].map((stat) => (
+          <div key={stat.label} className="bg-bg-surface border border-border-subtle rounded-xl p-4">
+            <div className="text-text-secondary text-xs uppercase tracking-wider mb-1">{stat.label}</div>
+            <div className="font-mono text-text-primary font-semibold">{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* P&L */}
+      <div className={`p-4 rounded-xl border mb-8 ${isPnlPositive ? "border-profit/30 bg-profit/5" : "border-loss/30 bg-loss/5"}`}>
+        <div className="text-text-secondary text-xs uppercase tracking-wider mb-1">Total P&L</div>
+        <div className={`font-mono text-2xl font-bold ${isPnlPositive ? "text-profit" : "text-loss"}`}>
+          {isPnlPositive ? "+" : ""}{formatValue(holding.pnl, holdingCurrency)}
+        </div>
+        <div className={`font-mono text-sm ${isPnlPositive ? "text-profit" : "text-loss"}`}>
+          {isPnlPositive ? "+" : ""}{holding.pnl_percent.toFixed(2)}%
+        </div>
+      </div>
+
+      {/* Transaction history */}
+      <div>
+        <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4">Transaction History</h2>
+        {txLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-14 bg-bg-raised rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="flex items-center justify-center h-24 bg-bg-surface border border-border-subtle rounded-xl">
+            <p className="text-text-secondary text-sm">No transactions yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {transactions.map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between p-4 bg-bg-surface border border-border-subtle rounded-xl">
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 rounded text-xs font-mono font-medium ${
+                    tx.transaction_type === "buy" ? "bg-profit/10 text-profit" :
+                    tx.transaction_type === "sell" ? "bg-loss/10 text-loss" :
+                    "bg-accent-violet/10 text-accent-violet"
+                  }`}>
+                    {tx.transaction_type.replace("_", " ")}
+                  </span>
+                  <span className="text-text-secondary text-sm font-mono">{tx.transaction_date}</span>
+                  {tx.notes && <span className="text-text-secondary text-xs">{tx.notes}</span>}
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-sm text-text-primary">
+                    {formatValue(tx.total_value, holdingCurrency)}
+                  </div>
+                  {tx.quantity && (
+                    <div className="font-mono text-xs text-text-secondary">
+                      {tx.quantity} @ {formatValue(tx.price_per_unit!, holdingCurrency)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Transaction form modal */}
+      {showForm && accountId && (
+        <TransactionForm
+          accountId={accountId}
+          holdingId={holdingId}
+          holdingName={holding.name}
+          onSuccess={refetch}
+          onClose={() => setShowForm(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+
+STEP 5 — Show me any TypeScript errors reported by the dev server after saving all files. Just show the terminal output.
