@@ -20,7 +20,6 @@
 ✅ 17. Implement analytics endpoints — allocation breakdown, effective exposure
 
 ✔ PHASE 3 — FRONTEND FOUNDATION
-
 ✅ 18. Build Sidebar component with navigation links
 ✅ 19. Build Topbar component with currency toggle and refresh indicator
 ✅ 20. Build Dashboard layout wrapping sidebar + topbar
@@ -28,15 +27,20 @@
 ✅ 22. Connect Login page to backend auth API
 
 PHASE 4 — FRONTEND PAGES
-23. Build Dashboard page — net worth number, daily change, time filter tabs
-24. Build Robinhood-style portfolio graph using Recharts with time range switching
-25. Build account summary cards on Dashboard (Indian Broker, Robinhood, Crypto)
+
+✅ 23. Build Dashboard page — net worth number, daily change, time filter tabs
+✅ 24. Build Robinhood-style portfolio graph using Recharts with time range switching
+✅ 25. Build account summary cards on Dashboard (Indian Broker, Robinhood, Crypto)
+
 26. Build Indian Broker account page — holdings list, account graph
 27. Build Robinhood account page — holdings list, effective exposure section, account graph
 28. Build Crypto account page — holdings list, account graph
+
 29. Build Holdings list component — ticker, quantity, avg price, current price, P&L
 30. Build Transaction form modal — log buy/sell/dividend/reward/staking
+
 31. Build Analytics page — asset allocation pie chart
+
 32. Build Settings page — manage holdings (add, edit, delete), preferences
 
 PHASE 5 — POLISH

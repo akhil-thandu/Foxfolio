@@ -1,30 +1,426 @@
-Run the seed script against the production Neon database.
+We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/frontend.
 
-cd C:/Logan/Projects/Foxfolio/backend && python -c "
-import os
-os.environ['DATABASE_URL'] = 'postgresql://neondb_owner:npg_uqtl4BG5fXvy@ep-curly-snow-a4sin8zm-pooler.us-east-1.aws.neon.tech/foxfolio_prod?sslmode=require&channel_binding=require'
+Create and rewrite files exactly as specified below. Do all steps in order.
 
-import uuid
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from app.db.models import User, Account, Settings
-from app.core.security import hash_password
+STEP 1 — Create frontend/store/portfolio.ts with this exact content:
 
-engine = create_engine(os.environ['DATABASE_URL'])
-db = Session(engine)
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-existing = db.query(User).first()
-if existing:
-    print('Already seeded')
-else:
-    user = User(id=uuid.uuid4(), username='logan', password_hash=hash_password('logandev123'))
-    db.add(user)
-    db.flush()
-    for name, atype, currency in [('Groww','indian_broker','INR'),('Robinhood','robinhood','USD'),('Crypto','crypto','USD')]:
-        db.add(Account(id=uuid.uuid4(), user_id=user.id, name=name, account_type=atype, currency=currency))
-    db.add(Settings(id=uuid.uuid4(), user_id=user.id, base_currency='USD', price_refresh_interval=1))
-    db.commit()
-    print('Seeded production database successfully')
-    print(f'User: logan | Accounts: Groww, Robinhood, Crypto')
-db.close()
-"
+interface PortfolioStore {
+  currency: "USD" | "INR";
+  setCurrency: (currency: "USD" | "INR") => void;
+}
+
+export const usePortfolioStore = create<PortfolioStore>()(
+  persist(
+    (set) => ({
+      currency: "USD",
+      setCurrency: (currency) => set({ currency }),
+    }),
+    {
+      name: "foxfolio-preferences",
+    }
+  )
+);
+
+
+STEP 2 — Create frontend/hooks/usePortfolio.ts with this exact content:
+
+import { useState, useEffect } from "react";
+import api from "@/lib/api";
+
+export interface AccountSummary {
+  id: string;
+  name: string;
+  account_type: string;
+  currency: string;
+  total_value_usd: number;
+  total_value_inr: number;
+}
+
+export interface HoldingSummary {
+  id: string;
+  account_id: string;
+  ticker: string;
+  name: string;
+  asset_type: string;
+  quantity: number;
+  avg_buy_price: number;
+  current_price: number;
+  currency: string;
+  total_value: number;
+  cost_basis: number;
+  pnl: number;
+  pnl_percent: number;
+  price_fresh: boolean;
+}
+
+export interface PortfolioSummary {
+  total_value_usd: number;
+  total_value_inr: number;
+  daily_change_usd: number | null;
+  daily_change_percent: number | null;
+  accounts: AccountSummary[];
+  holdings: HoldingSummary[];
+}
+
+export interface SnapshotPoint {
+  date?: string;
+  timestamp?: string;
+  value_usd: number;
+  value_inr: number;
+  twr?: number;
+}
+
+export function usePortfolioSummary() {
+  const [data, setData] = useState<PortfolioSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetch() {
+      try {
+        const res = await api.get("/api/v1/portfolio/summary");
+        setData(res.data.data);
+      } catch (err) {
+        setError("Failed to load portfolio");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetch();
+  }, []);
+
+  return { data, loading, error };
+}
+
+export function usePortfolioHistory(range: string) {
+  const [data, setData] = useState<SnapshotPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetch() {
+      setLoading(true);
+      try {
+        const res = await api.get(`/api/v1/portfolio/history?range=${range}`);
+        setData(res.data.data);
+      } catch (err) {
+        setError("Failed to load history");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetch();
+  }, [range]);
+
+  return { data, loading, error };
+}
+
+
+STEP 3 — Update frontend/components/layout/Topbar.tsx to use the Zustand store for currency. Rewrite it with this exact content:
+
+"use client";
+
+import { Clock } from "lucide-react";
+import { usePortfolioStore } from "@/store/portfolio";
+
+export default function Topbar() {
+  const { currency, setCurrency } = usePortfolioStore();
+
+  return (
+    <header className="h-16 bg-bg-surface border-b border-border-subtle flex items-center justify-between px-6 sticky top-0 z-10">
+      <div className="flex items-center gap-2 text-text-secondary text-sm">
+        <Clock size={14} />
+        <span className="font-mono text-xs">Last updated: --:--</span>
+        <span className="flex items-center gap-1 text-xs text-accent-cyan">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan inline-block animate-pulse" />
+          Live
+        </span>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="flex items-center bg-bg-raised border border-border-subtle rounded-lg p-1">
+          <button
+            onClick={() => setCurrency("USD")}
+            className={`px-3 py-1 rounded-md text-sm font-mono transition-colors ${
+              currency === "USD"
+                ? "bg-accent-violet text-white"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            USD
+          </button>
+          <button
+            onClick={() => setCurrency("INR")}
+            className={`px-3 py-1 rounded-md text-sm font-mono transition-colors ${
+              currency === "INR"
+                ? "bg-accent-violet text-white"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            INR
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+
+STEP 4 — Create frontend/components/charts/PortfolioGraph.tsx with this exact content:
+
+"use client";
+
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { SnapshotPoint } from "@/hooks/usePortfolio";
+
+interface Props {
+  data: SnapshotPoint[];
+  currency: "USD" | "INR";
+  loading: boolean;
+}
+
+function formatValue(value: number, currency: "USD" | "INR") {
+  if (currency === "USD") {
+    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatLabel(point: SnapshotPoint) {
+  const raw = point.date || point.timestamp;
+  if (!raw) return "";
+  const d = new Date(raw);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+export default function PortfolioGraph({ data, currency, loading }: Props) {
+  if (loading) {
+    return (
+      <div className="h-64 bg-bg-raised rounded-xl animate-pulse" />
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-64 bg-bg-raised rounded-xl flex items-center justify-center">
+        <p className="text-text-secondary text-sm">No historical data yet. Check back tomorrow.</p>
+      </div>
+    );
+  }
+
+  const valueKey = currency === "USD" ? "value_usd" : "value_inr";
+  const chartData = data.map((point) => ({
+    label: formatLabel(point),
+    value: point[valueKey],
+  }));
+
+  const isPositive = chartData[chartData.length - 1]?.value >= chartData[0]?.value;
+  const lineColor = isPositive ? "#00C805" : "#FF3B30";
+
+  return (
+    <ResponsiveContainer width="100%" height={256}>
+      <AreaChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="graphGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={lineColor} stopOpacity={0.2} />
+            <stop offset="95%" stopColor={lineColor} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: 11, fill: "#7070A0", fontFamily: "JetBrains Mono" }}
+          axisLine={false}
+          tickLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis hide />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: "#1C1C26",
+            border: "1px solid #2D2D3D",
+            borderRadius: "8px",
+            fontFamily: "JetBrains Mono",
+            fontSize: "12px",
+            color: "#F0F0FF",
+          }}
+          formatter={(value: number) => [formatValue(value, currency), "Value"]}
+          labelStyle={{ color: "#7070A0" }}
+        />
+        <Area
+          type="monotone"
+          dataKey="value"
+          stroke={lineColor}
+          strokeWidth={2}
+          fill="url(#graphGradient)"
+          dot={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+
+STEP 5 — Rewrite frontend/app/(dashboard)/dashboard/page.tsx with this exact content:
+
+"use client";
+
+import { useState } from "react";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import { usePortfolioSummary, usePortfolioHistory } from "@/hooks/usePortfolio";
+import { usePortfolioStore } from "@/store/portfolio";
+import PortfolioGraph from "@/components/charts/PortfolioGraph";
+import Link from "next/link";
+
+const TIME_RANGES = ["1H", "1D", "1W", "1M", "3M", "1Y", "ALL"];
+
+function formatValue(value: number | null, currency: "USD" | "INR") {
+  if (value === null || value === undefined) return "--";
+  if (currency === "USD") {
+    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getAccountHref(accountType: string) {
+  if (accountType === "indian_broker") return "/accounts/indian";
+  if (accountType === "robinhood") return "/accounts/robinhood";
+  if (accountType === "crypto") return "/accounts/crypto";
+  return "/accounts";
+}
+
+export default function DashboardPage() {
+  const [activeRange, setActiveRange] = useState("1M");
+  const { currency } = usePortfolioStore();
+  const { data: summary, loading: summaryLoading } = usePortfolioSummary();
+  const { data: history, loading: historyLoading } = usePortfolioHistory(activeRange);
+
+  const totalValue = currency === "USD"
+    ? summary?.total_value_usd ?? null
+    : summary?.total_value_inr ?? null;
+
+  const dailyChange = currency === "USD"
+    ? summary?.daily_change_usd ?? null
+    : null;
+
+  const dailyChangePct = summary?.daily_change_percent ?? null;
+  const isPositive = dailyChange !== null ? dailyChange >= 0 : null;
+
+  return (
+    <div className="text-text-primary max-w-6xl">
+      {/* Net worth */}
+      <div className="mb-6">
+        {summaryLoading ? (
+          <div className="space-y-2">
+            <div className="h-12 w-64 bg-bg-raised rounded-lg animate-pulse" />
+            <div className="h-5 w-32 bg-bg-raised rounded-lg animate-pulse" />
+          </div>
+        ) : (
+          <>
+            <div className="font-mono text-5xl font-bold text-text-primary tracking-tight">
+              {formatValue(totalValue, currency)}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              {dailyChange !== null ? (
+                <>
+                  {isPositive ? (
+                    <TrendingUp size={16} className="text-profit" />
+                  ) : (
+                    <TrendingDown size={16} className="text-loss" />
+                  )}
+                  <span className={`font-mono text-sm ${isPositive ? "text-profit" : "text-loss"}`}>
+                    {isPositive ? "+" : ""}{formatValue(dailyChange, currency)}
+                  </span>
+                  <span className={`font-mono text-sm ${isPositive ? "text-profit" : "text-loss"}`}>
+                    ({isPositive ? "+" : ""}{dailyChangePct?.toFixed(2)}%)
+                  </span>
+                  <span className="text-text-secondary text-xs">today</span>
+                </>
+              ) : (
+                <span className="text-text-secondary text-sm">Daily change available after first snapshot</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Time range tabs */}
+      <div className="flex gap-1 mb-4">
+        {TIME_RANGES.map((range) => (
+          <button
+            key={range}
+            onClick={() => setActiveRange(range)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
+              activeRange === range
+                ? "bg-bg-raised text-accent-cyan border border-accent-cyan"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            {range}
+          </button>
+        ))}
+      </div>
+
+      {/* Portfolio graph */}
+      <div className="mb-8">
+        <PortfolioGraph
+          data={history}
+          currency={currency}
+          loading={historyLoading}
+        />
+      </div>
+
+      {/* Account summary cards */}
+      <div>
+        <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4">Accounts</h2>
+        {summaryLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-28 bg-bg-raised rounded-xl animate-pulse border border-border-subtle" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {summary?.accounts.map((account) => {
+              const value = currency === "USD" ? account.total_value_usd : account.total_value_inr;
+              return (
+                <Link
+                  key={account.id}
+                  href={getAccountHref(account.account_type)}
+                  className="p-5 bg-bg-surface border border-border-subtle rounded-xl hover:border-accent-violet transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-text-secondary text-sm">{account.name}</span>
+                    <span className="font-mono text-xs text-text-secondary bg-bg-raised px-2 py-0.5 rounded">
+                      {account.currency}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xl font-semibold text-text-primary">
+                    {formatValue(value, currency)}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+STEP 6 — Start the frontend locally and confirm no TypeScript or build errors:
+cd C:/Logan/Projects/Foxfolio/frontend && npm run dev
+
+Let it compile and report the output. Do NOT stop it — leave it running so manual testing can happen.
+
+Show full output.

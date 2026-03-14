@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { RefreshCw, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
+import { usePortfolioStore } from "@/store/portfolio";
 
 export default function Topbar() {
-  const [currency, setCurrency] = useState<"USD" | "INR">("USD");
+  const { currency, setCurrency } = usePortfolioStore();
 
   return (
     <header className="h-16 bg-bg-surface border-b border-border-subtle flex items-center justify-between px-6 sticky top-0 z-10">
-      {/* Left — refresh indicator */}
       <div className="flex items-center gap-2 text-text-secondary text-sm">
         <Clock size={14} />
         <span className="font-mono text-xs">Last updated: --:--</span>
@@ -18,7 +17,6 @@ export default function Topbar() {
         </span>
       </div>
 
-      {/* Right — currency toggle */}
       <div className="flex items-center gap-4">
         <div className="flex items-center bg-bg-raised border border-border-subtle rounded-lg p-1">
           <button
