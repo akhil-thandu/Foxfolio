@@ -1,119 +1,290 @@
-We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/backend.
+We are working inside the Foxfolio project at C:/Logan/Projects/Foxfolio/frontend.
 
-Rewrite two files exactly as specified below.
+Create and rewrite files exactly as specified below. Do all steps in order.
 
-STEP 1 — Rewrite backend/app/services/analytics_service.py with this exact content:
+STEP 1 — Create frontend/middleware.ts with this exact content:
 
-from sqlalchemy.orm import Session
-from app.db.models import Account, Holding
-from app.services.price_service import get_price
-from app.services.currency_service import convert_inr_to_usd
+import { NextRequest, NextResponse } from "next/server";
 
-async def get_allocation(db: Session) -> dict:
-    holdings = db.query(Holding).all()
-    accounts = db.query(Account).all()
-    account_map = {str(a.id): a for a in accounts}
+const PUBLIC_ROUTES = ["/login"];
 
-    by_asset_type = {}
-    by_account = {}
-    by_currency = {}
-    total_usd = 0.0
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
-    holding_values = []
-    for h in holdings:
-        price_data = await get_price(h.ticker, h.asset_type)
-        price = price_data["price"] or 0
-        value = price * float(h.quantity)
+  const isPublic = PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
+  const refreshToken = request.cookies.get("refresh_token");
 
-        if h.currency == "INR":
-            value_usd = await convert_inr_to_usd(value) or 0
-        else:
-            value_usd = value
+  if (!isPublic && !refreshToken) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
 
-        holding_values.append({
-            "holding": h,
-            "value_usd": value_usd
-        })
-        total_usd += value_usd
+  if (isPublic && refreshToken) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
 
-    for hv in holding_values:
-        h = hv["holding"]
-        value_usd = hv["value_usd"]
-        pct = round((value_usd / total_usd * 100), 2) if total_usd > 0 else 0
+  return NextResponse.next();
+}
 
-        asset_type = h.asset_type
-        if asset_type not in by_asset_type:
-            by_asset_type[asset_type] = {"value_usd": 0.0, "percent": 0.0}
-        by_asset_type[asset_type]["value_usd"] += round(value_usd, 2)
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
+};
 
-        account = account_map.get(str(h.account_id))
-        account_name = account.name if account else "Unknown"
-        if account_name not in by_account:
-            by_account[account_name] = {"value_usd": 0.0, "percent": 0.0}
-        by_account[account_name]["value_usd"] += round(value_usd, 2)
 
-        currency = h.currency
-        if currency not in by_currency:
-            by_currency[currency] = {"value_usd": 0.0, "percent": 0.0}
-        by_currency[currency]["value_usd"] += round(value_usd, 2)
+STEP 2 — Rewrite frontend/lib/auth.ts with this exact content:
 
-    for group in [by_asset_type, by_account, by_currency]:
-        for key in group:
-            group[key]["percent"] = round((group[key]["value_usd"] / total_usd * 100), 2) if total_usd > 0 else 0
+import api from "./api";
 
-    return {
-        "total_value_usd": round(total_usd, 2),
-        "by_asset_type": by_asset_type,
-        "by_account": by_account,
-        "by_currency": by_currency
+export async function login(password: string): Promise<string> {
+  const response = await api.post("/api/v1/auth/login", { password });
+  const token = response.data.data.access_token;
+  if (typeof window !== "undefined") {
+    (window as any).__accessToken = token;
+  }
+  return token;
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await api.post("/api/v1/auth/logout");
+  } finally {
+    if (typeof window !== "undefined") {
+      (window as any).__accessToken = null;
     }
+    window.location.href = "/login";
+  }
+}
 
-
-STEP 2 — Rewrite backend/app/api/v1/analytics.py with this exact content:
-
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from app.db.database import get_db
-from app.services.analytics_service import get_allocation
-
-router = APIRouter()
-
-@router.get("/allocation")
-async def allocation(db: Session = Depends(get_db)):
-    result = await get_allocation(db)
-    return {
-        "success": True,
-        "data": result
+export async function silentRefresh(): Promise<string | null> {
+  try {
+    const response = await api.post("/api/v1/auth/refresh");
+    const token = response.data.data.access_token;
+    if (typeof window !== "undefined") {
+      (window as any).__accessToken = token;
     }
+    return token;
+  } catch {
+    return null;
+  }
+}
 
-@router.get("/exposure")
-async def exposure():
-    return {
-        "success": True,
-        "data": {
-            "message": "Effective exposure coming in next iteration",
-            "direct_holdings": [],
-            "etf_exposure": []
-        }
+
+STEP 3 — Create frontend/hooks/useAuth.ts with this exact content:
+
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { silentRefresh } from "@/lib/auth";
+
+export function useAuth() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    async function init() {
+      const hasToken = typeof window !== "undefined" && !!(window as any).__accessToken;
+      if (hasToken) {
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return;
+      }
+      const token = await silentRefresh();
+      if (token) {
+        setIsAuthenticated(true);
+      } else {
+        router.push("/login");
+      }
+      setIsLoading(false);
     }
+    init();
+  }, [router]);
+
+  return { isAuthenticated, isLoading };
+}
 
 
-STEP 3 — Start the backend server and confirm no errors:
-cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --reload --port 8001
+STEP 4 — Rewrite frontend/app/(auth)/login/page.tsx with this exact content:
 
-Confirm it starts cleanly then stop it.
+"use client";
 
-STEP 4 — Run these tests:
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { login } from "@/lib/auth";
+import { Eye, EyeOff, Lock } from "lucide-react";
 
-cd C:/Logan/Projects/Foxfolio/backend
+export default function LoginPage() {
+  const router = useRouter();
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-Test 1 — Login and save token:
-curl -s -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d "{\"password\": \"logandev123\"}" > token.json
+  async function handleLogin() {
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await login(password);
+      router.push("/dashboard");
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || "Invalid password";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-Test 2 — Get allocation breakdown:
-TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/analytics/allocation -H "Authorization: Bearer $TOKEN"
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") handleLogin();
+  }
 
-Test 3 — Get exposure stub:
-TOKEN=$(python -c "import json; d=json.load(open('token.json')); print(d['data']['access_token'])") && curl -s http://localhost:8001/api/v1/analytics/exposure -H "Authorization: Bearer $TOKEN"
+  return (
+    <div className="min-h-screen flex">
+      {/* Left panel */}
+      <div className="w-[60%] bg-bg-primary flex flex-col items-center justify-center relative px-16">
+        <div className="text-center">
+          <div className="text-7xl mb-6">🦊</div>
+          <h1 className="font-mono font-bold text-5xl text-text-primary tracking-widest mb-4">
+            FOXFOLIO
+          </h1>
+          <p className="text-text-secondary text-lg font-light tracking-wide">
+            Your wealth. Unified.
+          </p>
+        </div>
+        <div className="absolute bottom-8 left-8">
+          <span className="font-mono text-xs text-text-secondary">v1.0.0</span>
+        </div>
+      </div>
+
+      {/* Right panel */}
+      <div className="w-[40%] bg-bg-raised flex flex-col items-center justify-center px-12">
+        <div className="w-full max-w-sm">
+          <h2 className="text-2xl font-bold text-text-primary mb-2">Welcome back</h2>
+          <p className="text-text-secondary text-sm mb-8">
+            Sign in to your portfolio
+          </p>
+
+          {/* Password input */}
+          <div className="mb-4">
+            <label className="block text-text-secondary text-sm mb-2">
+              Password
+            </label>
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">
+                <Lock size={16} />
+              </div>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter your password"
+                className="w-full h-12 bg-bg-surface border border-border-subtle rounded-lg pl-10 pr-10 text-text-primary text-sm outline-none focus:border-accent-violet transition-colors placeholder:text-text-secondary"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Error message */}
+          {error && (
+            <p className="text-loss text-sm mb-4">{error}</p>
+          )}
+
+          {/* Login button */}
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full h-12 bg-accent-violet hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-lg transition-opacity"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+STEP 5 — Create frontend/app/(dashboard)/accounts/page.tsx with this exact content:
+
+import Link from "next/link";
+import { TrendingUp, IndianRupee, Bitcoin } from "lucide-react";
+
+const ACCOUNTS = [
+  {
+    name: "Groww",
+    description: "Indian stocks on NSE/BSE",
+    href: "/accounts/indian",
+    icon: IndianRupee,
+    currency: "INR",
+  },
+  {
+    name: "Robinhood",
+    description: "US stocks and ETFs",
+    href: "/accounts/robinhood",
+    icon: TrendingUp,
+    currency: "USD",
+  },
+  {
+    name: "Crypto",
+    description: "Cryptocurrency via Ledger",
+    href: "/accounts/crypto",
+    icon: Bitcoin,
+    currency: "USD",
+  },
+];
+
+export default function AccountsPage() {
+  return (
+    <div className="text-text-primary">
+      <h1 className="text-2xl font-bold mb-2">Accounts</h1>
+      <p className="text-text-secondary text-sm mb-8">
+        Select an account to view holdings and performance.
+      </p>
+      <div className="grid grid-cols-1 gap-4 max-w-2xl">
+        {ACCOUNTS.map((account) => (
+          <Link
+            key={account.href}
+            href={account.href}
+            className="flex items-center gap-4 p-6 bg-bg-surface border border-border-subtle rounded-xl hover:border-accent-violet transition-colors group"
+          >
+            <div className="w-12 h-12 rounded-lg bg-bg-raised flex items-center justify-center text-accent-cyan group-hover:text-accent-violet transition-colors">
+              <account.icon size={22} />
+            </div>
+            <div className="flex-1">
+              <h2 className="font-semibold text-text-primary">{account.name}</h2>
+              <p className="text-text-secondary text-sm">{account.description}</p>
+            </div>
+            <div className="font-mono text-xs text-text-secondary bg-bg-raised px-2 py-1 rounded">
+              {account.currency}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+STEP 6 — Start the frontend and confirm no build errors:
+cd C:/Logan/Projects/Foxfolio/frontend && npm run dev
+
+Confirm it compiles cleanly then stop it.
+
+STEP 7 — Start both servers:
+Backend: cd C:/Logan/Projects/Foxfolio/backend && uvicorn app.main:app --port 8001
+Frontend: cd C:/Logan/Projects/Foxfolio/frontend && npm run dev
+
+Confirm both running cleanly then stop both.
 
 Report the full output of every step. Stop immediately if any step fails.

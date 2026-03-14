@@ -3,3 +3,4 @@
 3. deleting a transaction doesnt modify the details for the holding
 4. api data fetching intervals need to be discussed
 5. Effective Exposure
+6. dark/light mode preferences saving
