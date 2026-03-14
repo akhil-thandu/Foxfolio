@@ -19,14 +19,13 @@
 ✅ 15. Implement APScheduler — price refresh every 1 min, daily snapshot job, intraday cleanup job
 ✅ 17. Implement analytics endpoints — allocation breakdown, effective exposure
 
-PHASE 3 — FRONTEND FOUNDATION
+✔ PHASE 3 — FRONTEND FOUNDATION
 
 ✅ 18. Build Sidebar component with navigation links
 ✅ 19. Build Topbar component with currency toggle and refresh indicator
 ✅ 20. Build Dashboard layout wrapping sidebar + topbar
-
-21. Build Login page UI — two panel layout, password form, JWT auth flow
-22. Connect Login page to backend auth API
+✅ 21. Build Login page UI — two panel layout, password form, JWT auth flow
+✅ 22. Connect Login page to backend auth API
 
 PHASE 4 — FRONTEND PAGES
 23. Build Dashboard page — net worth number, daily change, time filter tabs
