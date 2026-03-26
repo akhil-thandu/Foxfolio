@@ -31,7 +31,18 @@
       "Bash(powershell.exe -NoProfile -Command \"Stop-Process -Id 14524 -Force; Start-Sleep 2; netstat -ano | Select-String ':8001'\")",
       "Bash(cd C:/Logan/Projects/Foxfolio/frontend && npm run dev)",
       "Bash(cd:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(find:*)",
+      "Bash(node:*)",
+      "Bash(pip:*)",
+      "Bash(docker:*)",
+      "mcp__stitch__list_projects",
+      "mcp__stitch__list_screens",
+      "mcp__stitch__get_screen",
+      "WebFetch(domain:lh3.googleusercontent.com)",
+      "WebFetch(domain:contribution.usercontent.google.com)",
+      "Bash(npx next:*)",
+      "mcp__stitch__list_design_systems"
     ]
   }
 }
