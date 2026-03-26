@@ -42,7 +42,24 @@
       "WebFetch(domain:lh3.googleusercontent.com)",
       "WebFetch(domain:contribution.usercontent.google.com)",
       "Bash(npx next:*)",
-      "mcp__stitch__list_design_systems"
+      "mcp__stitch__list_design_systems",
+      "Bash(netstat -ano)",
+      "Bash(tasklist //FI \"PID eq 5832\")",
+      "Bash(tasklist /FI \"PID eq 5832\")",
+      "Bash(kill 2832)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(taskkill:*)",
+      "Bash(curl -s -o /dev/null -w \"Backend \\(8001\\): %{http_code}\\\\n\" http://localhost:8001/docs)",
+      "Bash(curl -s -o /dev/null -w \"Frontend \\(3000\\): %{http_code}\\\\n\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8001/docs)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -L -s \"https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzk3MjVjNWQ3MzFhMTQ0OTRiNGY3YzBkYjgwNDhjZDAwEgsSBxD3gZD-1QwYAZIBIwoKcHJvamVjdF9pZBIVQhM3OTE3NDU0NjAxMjMxMTU0Njk5&filename=&opi=89354086\" -o /tmp/stitch_dashboard.html)",
+      "Read(//tmp/**)",
+      "Bash(curl -L -s \"https://lh3.googleusercontent.com/aida/ADBb0uiIhkKkwsUu4C2YeJacRGS_moEdNpvaOYsXCQvDAfTIBnZYHYuXcjyYtT6IZDjqCzDkI2rNNw8QxD3fPXLQs5HG8gjbbVnIWZOIxzqKWbW34RITfLIuLHUhm9nv0AzZM-TJaIeT6Jg0AgRaz6k9lTrbS0yex_G7HYEHVz5FyRNc_Y3KpodlkFw8pPYy-GgppnaHBdevnQJrwEe3lVpFiXJQ3LsjoPGQhIfGakV5co0vKUhMaemVhtvkHwI\" -o /tmp/stitch_dashboard.png)",
+      "Bash(curl -s http://localhost:3000/accounts/robinhood)",
+      "Bash(curl:*)",
+      "Bash(ls \"C:/XPS/Akhil/Projects/Foxfolio/Foxfolio/frontend/app/\\(dashboard\\)/accounts/robinhood\")"
     ]
   }
 }

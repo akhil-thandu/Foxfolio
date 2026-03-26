@@ -1,0 +1,600 @@
+/* Robinhood Account Dashboard — Standalone Page Styles */
+
+/* ── Full-page shell ── */
+.page {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Top Navigation Bar ── */
+.navbar {
+  width: 100%;
+  background: var(--bg-surface);
+  border-bottom: 1px solid rgba(53, 52, 58, 0.3);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.navInner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.navBrand {
+  display: flex;
+  flex-direction: column;
+}
+
+.navLogo {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: var(--accent-violet);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.navSubtitle {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.navLinks {
+  display: none;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+@media (min-width: 768px) {
+  .navLinks {
+    display: flex;
+  }
+}
+
+.navLink {
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  transition: all 0.2s;
+  text-decoration: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.navLink:hover {
+  color: var(--text-primary);
+  opacity: 1;
+  background: var(--bg-raised);
+}
+
+.navLinkActive {
+  composes: navLink;
+  background: rgba(123, 79, 255, 0.1);
+  color: var(--accent-violet-light);
+  opacity: 1;
+}
+
+.navIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* ── Main Content ── */
+.main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 8rem;
+}
+
+/* ── Portfolio Summary ── */
+.summarySection {
+  margin-bottom: 3rem;
+}
+
+.summaryRow {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .summaryRow {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+.label {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.totalValue {
+  font-family: 'Inter', sans-serif;
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+@media (min-width: 768px) {
+  .totalValue {
+    font-size: 4.5rem;
+  }
+}
+
+.totalCents {
+  color: var(--text-secondary);
+  opacity: 0.4;
+}
+
+.changeRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.changePositive {
+  color: var(--profit);
+  font-weight: 700;
+  font-size: 1.125rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.changeNegative {
+  color: var(--loss);
+  font-weight: 700;
+  font-size: 1.125rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.changeIcon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.changePeriod {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  font-weight: 500;
+  margin-left: 0.5rem;
+}
+
+/* ── Time Range Selector ── */
+.timeRangeGroup {
+  display: flex;
+  background: var(--bg-raised);
+  padding: 0.375rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(73, 68, 85, 0.05);
+}
+
+.timeBtn {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.timeBtn:hover {
+  background: var(--bg-raised-high);
+  opacity: 1;
+}
+
+.timeBtnActive {
+  composes: timeBtn;
+  background: var(--accent-violet);
+  color: #ffffff;
+  opacity: 1;
+  box-shadow: 0 4px 12px rgba(123, 79, 255, 0.2);
+}
+
+.timeBtnActive:hover {
+  background: var(--accent-violet);
+}
+
+/* ── Chart Area ── */
+.chartContainer {
+  margin-top: 3rem;
+  height: 350px;
+  position: relative;
+  width: 100%;
+}
+
+.chartSvg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 15px rgba(204, 189, 255, 0.4));
+}
+
+.chartTooltip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.chartContainer:hover .chartTooltip {
+  opacity: 1;
+}
+
+.tooltipCard {
+  background: rgba(123, 79, 255, 0.05);
+  backdrop-filter: blur(20px);
+  padding: 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.tooltipDate {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.tooltipValue {
+  font-size: 1.125rem;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+/* ── Assets Section ── */
+.assetsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.assetsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.assetsTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Sort/Filter Pills ── */
+.filterPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  margin-top: 1.5rem;
+  overflow-x: auto;
+}
+
+.filterPill {
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(73, 68, 85, 0.3);
+  background: transparent;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filterPill:hover {
+  border-color: rgba(123, 79, 255, 0.5);
+}
+
+.filterPillActive {
+  composes: filterPill;
+  border-color: var(--accent-violet-light);
+  background: rgba(123, 79, 255, 0.1);
+  color: var(--accent-violet-light);
+  opacity: 1;
+}
+
+/* ── Holdings Table ── */
+.tableWrapper {
+  background: var(--bg-raised);
+  border-radius: 2rem;
+  overflow: hidden;
+  border: 1px solid rgba(73, 68, 85, 0.05);
+}
+
+.holdingsTable {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+}
+
+.tableHead th {
+  padding: 1.5rem 2rem;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-secondary);
+  font-weight: 700;
+  border-bottom: 1px solid rgba(73, 68, 85, 0.1);
+}
+
+.tableHead th:not(:first-child) {
+  text-align: right;
+}
+
+.holdingRow {
+  transition: background 0.2s;
+}
+
+.holdingRow:hover {
+  background: var(--bg-raised-high);
+}
+
+.holdingRow td {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid rgba(73, 68, 85, 0.05);
+}
+
+.tickerInfo {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tickerBadge {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: var(--bg-raised-high);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 0.75rem;
+  color: var(--accent-violet-light);
+  flex-shrink: 0;
+}
+
+.tickerBadgeCyan {
+  composes: tickerBadge;
+  color: var(--accent-cyan);
+}
+
+.tickerBadgeGreen {
+  composes: tickerBadge;
+  color: var(--profit);
+}
+
+.tickerBadgePurple {
+  composes: tickerBadge;
+  color: #e7deff;
+}
+
+.holdingName {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.holdingCategory {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.valueCell {
+  text-align: right;
+}
+
+.holdingValue {
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.holdingChangePositive {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--profit);
+}
+
+.holdingChangeNegative {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #FF3B30;
+}
+
+.actionsCell {
+  text-align: right;
+}
+
+.moreBtn {
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.moreBtn:hover {
+  background: var(--bg-raised-highest);
+}
+
+.holdingRow:hover .moreBtn {
+  opacity: 1;
+}
+
+.viewAllRow {
+  padding: 2rem;
+  text-align: center;
+  border-top: 1px solid rgba(73, 68, 85, 0.1);
+}
+
+.viewAllBtn {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.viewAllBtn:hover {
+  color: #ffffff;
+  opacity: 1;
+}
+
+/* ── Mobile Bottom Nav ── */
+.mobileNav {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 50;
+  justify-content: space-around;
+  align-items: center;
+  padding: 1rem 1rem 2rem;
+  background: rgba(27, 27, 32, 0.8);
+  backdrop-filter: blur(40px);
+  border-top: 1px solid rgba(53, 52, 58, 0.1);
+  border-radius: 2rem 2rem 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 768px) {
+  .mobileNav {
+    display: none;
+  }
+}
+
+.mobileNavLink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1.25rem;
+  color: var(--text-primary);
+  opacity: 0.3;
+  text-decoration: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mobileNavLink:active {
+  transform: scale(0.95);
+}
+
+.mobileNavLinkActive {
+  composes: mobileNavLink;
+  background: rgba(123, 79, 255, 0.2);
+  color: var(--accent-violet-light);
+  opacity: 1;
+  border-radius: 1rem;
+}
+
+.mobileNavLabel {
+  font-size: 0.625rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  margin-top: 0.25rem;
+}
+
+.mobileNavIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* ── Floating Action Button (Mobile) ── */
+.fab {
+  display: flex;
+  position: fixed;
+  right: 1.5rem;
+  bottom: 7rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  background: linear-gradient(45deg, #ccbdff, #7b4fff);
+  color: #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 10px 30px rgba(123, 79, 255, 0.4);
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.fab:active {
+  transform: scale(0.9);
+}
+
+@media (min-width: 768px) {
+  .fab {
+    display: none;
+  }
+}
+
+.fabIcon {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+/* ── Responsive: hide actions column on small screens ── */
+@media (max-width: 639px) {
+  .actionsCol,
+  .actionsCell {
+    display: none;
+  }
+}
