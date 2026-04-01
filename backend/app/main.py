@@ -20,6 +20,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.cors_origin],
@@ -27,8 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["portfolio"])
